@@ -83,7 +83,7 @@ model = ESM2.from_pretrained('8M.safetensors', checkpointing=True)
 
 # Model Weights
 
-The model weights can be downloaded from the HuggingFace: [https://huggingface.co/mhcelik/esm-efficient](https://huggingface.co/mhcelik/esm-efficient)
+The model weights can be downloaded from the HuggingFace: [https://huggingface.co/mhcelik/esm-efficient/tree/main](https://huggingface.co/mhcelik/esm-efficient/tree/main)
 
 # Evaluation 
 
