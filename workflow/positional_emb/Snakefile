@@ -1,0 +1,55 @@
+rule uniref50_long:
+    input:
+        fasta=config["fasta"].format(uniprot="uniref50"),
+        fai=config["fasta"].format(uniprot="uniref50") + ".fai",
+    params:
+        max_seq_len=4096,
+    output:
+        train=config["uniref50_long"]["train"],
+        val=config["uniref50_long"]["val"],
+    script:
+        "./uniref50_long.py"
+
+
+rule train_positional_embedding_1b:
+    input:
+        model=model({"model": "1b"}),
+        train=config["uniref50_long"]["train"],
+        val=config["uniref50_long"]["val"],
+    params:
+        max_seq_len=4096,
+        epochs=100,
+        checkpoint_dir=directory(config["uniref50_long"]["checkpoint_dir"]),
+    threads: 4
+    resources:
+        mem_gb=32,
+    wildcard_constraints:
+        model="1b",
+    output:
+        model=config["safetensor"]["esm1b"],
+    script:
+        "train_positional.py"
+
+
+rule train_positional_embedding_1v:
+    input:
+        model=config["esm"]["1v"],
+        train=config["uniref50_long"]["train"],
+        val=config["uniref50_long"]["val"],
+    params:
+        max_seq_len=4096,
+        epochs=1,
+        checkpoint_dir=config["uniref50_long"]["checkpoint_dir_1v"],
+    threads: 4
+    resources:
+        mem_gb=32,
+    output:
+        model=config["safetensor"]["esm1v"],
+    script:
+        "train_positional.py"
+
+
+rule all_positional_emb:
+    input:
+        config["safetensor"]["esm1b"],
+        expand(config["safetensor"]["esm1v"], ens=[1, 2, 3, 4, 5]),

@@ -1,0 +1,59 @@
+rule uniprot_fasta_id:
+    input:
+        fasta=config["fasta_raw"],
+    output:
+        fasta=config["fasta"],
+    script:
+        "./uniprot_fasta_ids.py"
+
+
+rule uniprot_fasta_human:
+    input:
+        fasta=config["fasta_raw"].format(uniprot="uniprotkb"),
+    output:
+        fasta=config["fasta"].format(uniprot="human"),
+    script:
+        "./uniprot_fasta_human.py"
+
+
+rule index_fasta:
+    input:
+        fasta=config["fasta"],
+    output:
+        index=config["fasta"] + ".fai",
+    shell:
+        "samtools faidx {input}"
+
+
+rule uniport_hist:
+    input:
+        index=config["fasta"].format(uniprot="human") + ".fai",
+    output:
+        fig_hist="reports/figures/uniprot_human_hist.svg",
+        fig_cdf="reports/figures/uniprot_human_cdf.svg",
+    notebook:
+        "./uniprot_hist.py.ipynb"
+
+
+rule safetensor:
+    input:
+        model=model
+    wildcard_constraints:
+        model="[0-9]+[MB]",
+    output:
+        model=config["safetensor"]['esm2'],
+    script:
+        "./safetensor.py"
+
+
+rule all_common:
+    input:
+        expand(
+            config["safetensor"],
+            model=["8M", "35M", "150M", "650M", "3B", "15B"],
+        ),
+        expand(
+            config["fasta"] + ".fai",
+            uniprot=["uniprotkb", "uniref50", "uniref90", "human"],
+        ),
+        rules.uniport_hist.output,

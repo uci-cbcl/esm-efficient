@@ -1,0 +1,21 @@
+channels:
+  - nvidia/label/cuda-12.1.1
+  - pytorch
+  - conda-forge
+dependencies:
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cuda
+  - pytorch-cuda=12.1.1
+  - compilers
+  - sysroot_linux-64
+  - gcc
+  - ninja
+  - py-cpuinfo
+  - libaio
+  - ca-certificates
+  - certifi
+  - openssl
+  - python=3.8.2
+  - pydantic

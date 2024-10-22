@@ -1,0 +1,193 @@
+train_wildcards_memory = "model={model}_b={batch_size}_q={quantize}_c={checkpointing}_lora={lora}_d={deepspeed}"
+train_wildcards = (
+    "model={model}_q={quantize}_c={checkpointing}_lora={lora}_d={deepspeed}"
+)
+
+
+rule train_memory:
+    input:
+        model=model,
+        tokens=config["benchmark"]["tokens"],
+    threads: 32
+    resources:
+        mem_gb=memory,
+    params:
+        device=0,
+    output:
+        mem=f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+    script:
+        "train_memory.py"
+
+
+rule train_plot_memory:
+    input:
+        memory=[
+            expand(
+                f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+                model=models_esm2,
+                checkpointing=[False],
+                deepspeed=[False],
+                lora=["none"],
+                quantize=["none"],
+                batch_size=[4],
+            ),
+            expand(
+                f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+                checkpointing=[True],
+                deepspeed=[False, True],
+                lora=["none"],
+                quantize=["none"],
+                batch_size=[4],
+            ),
+            expand(
+                f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+                checkpointing=[True],
+                deepspeed=[False],
+                lora=["16;query,value,output"],
+                quantize=["none", "8bit"],
+                batch_size=[4],
+            ),
+        ],
+    output:
+        fig_memory="reports/figures/train_memory.svg",
+        table="reports/tables/train_memory.csv",
+    notebook:
+        "plot_memory.py.ipynb"
+
+
+rule train_plot_memory_length:
+    input:
+        expand(
+            f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+            model=["650Me", "3Be", "15Be"],
+            quantize=["none", "4bit", "8bit"],
+            checkpointing=[True],
+            lora=["16;query,value,output"],
+            deepspeed=[False],
+            batch_size=[4],
+        ),
+    threads: 1
+    resources:
+        mem_gb=16,
+    output:
+        fig_memory_len_batch="reports/figures/train_memory_length_batch.svg",
+    notebook:
+        "plot_memory_len_batch.py.ipynb"
+
+
+rule train_plot_memory_deepspeed:
+    input:
+        expand(
+            f"reports/tables/memory_usage_{train_wildcards_memory}.csv",
+            model=["650Me", "3Be", "15Be"],
+            quantize=["none"],
+            checkpointing=[True],
+            lora=["16;query,value,output"],
+            deepspeed=[False, True],
+            batch_size=[4],
+        ),
+    threads: 1
+    resources:
+        mem_gb=16,
+    output:
+        fig_memory="reports/figures/train_memory_deepspeed.svg",
+    notebook:
+        "plot_memory_deepspeed.py.ipynb"
+
+
+rule train_runtime_lightning:
+    input:
+        model=model,
+        fasta=config["fasta"].format(uniprot="uniprotkb"),
+        fai=config["fasta"].format(uniprot="uniprotkb") + ".fai",
+    threads: 32
+    resources:
+        mem_gb=memory,
+    wildcard_constraints:
+        deepspeed="False",
+    benchmark:
+        repeat(f"reports/tables/benchmarks/runtime_{train_wildcards}.lightning.txt", 1)
+    log:
+        f"logs/deepspeed/runtime_{train_wildcards}.lightning.out",
+    output:
+        touch(f"reports/tables/benchmarks/runtime_{train_wildcards}.lightning.done"),
+    script:
+        "runtime_lightning.py"
+
+
+rule train_runtime_deepspeed:
+    input:
+        model=model,
+        fasta=config["fasta"].format(uniprot="uniprotkb"),
+        fai=config["fasta"].format(uniprot="uniprotkb") + ".fai",
+    threads: 32
+    resources:
+        mem_gb=memory,
+    params:
+        token_per_batch=50_000,
+    wildcard_constraints:
+        deepspeed="True",
+    log:
+        f"logs/deepspeed/runtime_{train_wildcards}.out",
+    benchmark:
+        repeat(f"reports/tables/benchmarks/runtime_{train_wildcards}.txt", 1)
+    output:
+        touch(f"reports/tables/benchmarks/runtime_{train_wildcards}.done"),
+    shell:
+        'deepspeed \
+        --include="localhost:0,1,2,3" \
+        workflow/train/runtime.py \
+        --model {input.model} \
+        --fasta {input.fasta} \
+        --token_per_batch {params.token_per_batch} > {log}'
+
+
+rule train_plot_runtime:
+    input:
+        fai_uniprotkb=config["fasta"].format(uniprot="uniprotkb") + ".fai",
+        fai_uniprot50=config["fasta"].format(uniprot="uniref50") + ".fai",
+        runtime=[
+            expand(
+                f"reports/tables/benchmarks/runtime_{train_wildcards}.lightning.txt",
+                model=["8M", "35M", "150M", "650M"],
+                quantize=["none"],
+                checkpointing=[False],
+                lora=["none"],
+                deepspeed=False,
+            ),
+            expand(
+                f"reports/tables/benchmarks/runtime_{train_wildcards}.txt",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+                quantize=["none"],
+                checkpointing=[True],
+                lora=["none"],
+                deepspeed=True,
+            ),
+            expand(
+                f"reports/tables/benchmarks/runtime_{train_wildcards}.lightning.txt",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+                quantize=["none"],
+                checkpointing=[True],
+                lora=["16;query,value,output"],
+                deepspeed=False,
+            ),
+        ],
+    output:
+        stats="reports/tables/train_runtime_stats.csv",
+        token_stats="reports/tables/token_stats.csv",
+        fig="reports/figures/train_runtime.svg",
+        fig_estimate="reports/figures/train_runtime_estimate_uniprot50.svg",
+        fig_lora="reports/figures/train_runtime_finetune.svg",
+    notebook:
+        "plot_runtime.py.ipynb"
+
+
+rule all_train:
+    input:
+        rules.train_plot_memory_deepspeed.output,
+        rules.train_plot_memory_length.output,
+        rules.train_plot_memory_length.output,
+        rules.train_plot_memory.output,
+        rules.train_plot_runtime.output,

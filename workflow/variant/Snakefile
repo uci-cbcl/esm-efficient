@@ -1,0 +1,86 @@
+proteingym_mapping = "workflow/config/proteingym_mapping.csv"
+
+df_proteingym = pd.read_csv(proteingym_mapping)
+df_proteingym = df_proteingym[df_proteingym["DMS_id"].str.contains("HUMAN")]
+df_proteingym = df_proteingym[df_proteingym["uniprotkb"]]
+proteingym_ids = df_proteingym["Uniprot_ID"].unique().tolist()
+
+
+rule proteingym_predict:
+    input:
+        model=model,
+        mapping=proteingym_mapping,
+        dms_substitutions_dir=config["proteingym"]["substitutions"],
+    threads: 16
+    resources:
+        mem_gb=16,
+    params:
+        device=4,
+        proteins=proteingym_ids,
+    wildcard_constraints:
+        model="[^_]*",
+    output:
+        scatter_dir=directory(config["proteingym"]["scatter"]),
+        stats=config["proteingym"]["stats"],
+    script:
+        "./dms_results.py"
+
+
+rule proteingym_figure:
+    input:
+        expand(
+            config["proteingym"]["stats"],
+            protein=proteingym_ids,
+            model=[
+                "8Me",
+                "35Me",
+                "150Me",
+                "650Me",
+                "1be",
+                "1ve5",
+                "1ve4",
+                "1ve3",
+                "1ve2",
+                "1ve1",
+                "3Be",
+                "15Be",
+            ],
+            quantize=["none", "8bit", "4bit"],
+            cpuoffloading=[False],
+        ),
+        expand(
+            config["proteingym"]["stats"],
+            protein=proteingym_ids,
+            model=[
+                "8M",
+                "35M",
+                "150M",
+                "650M",
+                "1b",
+                "1v5",
+                "1v4",
+                "1v3",
+                "1v2",
+                "1v1",
+                "3B",
+                "15B",
+            ],
+            quantize=["none"],
+            cpuoffloading=[False],
+        ),
+    threads: 1
+    resources:
+        mem_gb=16,
+    params:
+        spearman_path=lambda wld: config["proteingym"]["stats"],
+    output:
+        fig="reports/figures/proteingym_maskmargin_spearman.svg",
+        fig_scatter="reports/figures/proteingym_maskmargin_spearman_scatter.svg",
+        table="reports/tables/proteingym_maskmargin_spearman.csv",
+    notebook:
+        "./variant_figure.py.ipynb"
+
+
+rule all_variant:
+    input:
+        rules.proteingym_figure.output,

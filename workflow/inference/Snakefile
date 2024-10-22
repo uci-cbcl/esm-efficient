@@ -1,0 +1,162 @@
+rule inference_subset_uniprotkb:
+    input:
+        fasta=config["fasta"].format(uniprot="uniprotkb"),
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        batch_size=16,
+    output:
+        tokens=config["benchmark"]["tokens"],
+    script:
+        "./extract_uniprotkb.py"
+
+
+rule inference_runtime:
+    input:
+        tokens=config["benchmark"]["tokens"],
+        model=model,
+    threads: 16
+    resources:
+        mem_gb=memory,
+    params:
+        device=0,
+    output:
+        runtime=f"reports/tables/inference_runtime_{model_wildcards}_repeat={{nrepeat}}.csv",
+    script:
+        "./inference_runtime.py"
+
+
+rule inference_memory:
+    input:
+        tokens=config["benchmark"]["tokens"],
+        model=model,
+    threads: 16
+    resources:
+        mem_gb=memory,
+    output:
+        mem=f"reports/tables/inference_memory_{model_wildcards}.csv",
+    script:
+        "./inference_memory.py"
+
+
+rule inference_figure_runtime:
+    input:
+        runtime=[
+            *expand(
+                f"reports/tables/inference_runtime_{model_wildcards}_repeat={{nrepeat}}.csv",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+                quantize=["none", "8bit", "4bit"],
+                cpuoffloading=[False],
+                nrepeat=[0],
+            ),
+            *expand(
+                f"reports/tables/inference_runtime_{model_wildcards}_repeat={{nrepeat}}.csv",
+                model=["8M", "35M", "150M", "650M", "3B", "15B"],
+                quantize=["none"],
+                cpuoffloading=[False],
+                nrepeat=[0],
+            ),
+        ],
+    threads: 1
+    resources:
+        mem_gb=16,
+    output:
+        fig="reports/figures/inference_runtime.svg",
+        fig_quantize="reports/figures/inference_runtime_quantize.svg",
+        table="reports/tables/inference_runtime.csv",
+    notebook:
+        "./inference_figure_runtime.py.ipynb"
+
+
+rule inference_figure_memory:
+    input:
+        memory=[
+            *expand(
+                f"reports/tables/inference_memory_{model_wildcards}.csv",
+                model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+                quantize=["none", "8bit", "4bit"],
+                cpuoffloading=[False],
+            ),
+            *expand(
+                f"reports/tables/inference_memory_{model_wildcards}.csv",
+                model=["8M", "35M", "150M", "650M", "3B", "15B"],
+                quantize=["none"],
+                cpuoffloading=[False],
+            ),
+        ],
+    threads: 1
+    resources:
+        mem_gb=16,
+    output:
+        fig="reports/figures/inference_memory.svg",
+        fig_quantize="reports/figures/inference_memory_quantize.svg",
+        table="reports/tables/inference_memory.csv",
+    notebook:
+        "./inference_figure_memory.py.ipynb"
+
+
+rule batch_size_protein_tokens:
+    input:
+        config["fasta"].format(uniprot="human") + ".fai",
+        fasta=config["fasta"].format(uniprot="human"),
+    output:
+        fig_protein="reports/figures/batch_size_protein.svg",
+        fig_tokens="reports/figures/batch_size_tokens.svg",
+    notebook:
+        "./batch_size_protein_tokens.py.ipynb"
+
+
+rule max_batch_token_size:
+    input:
+        config["fasta"].format(uniprot="human") + ".fai",
+        fasta=config["fasta"].format(uniprot="human"),
+        model=model,
+    output:
+        mem="reports/tables/max_batch_size_model={model}_inference.csv",
+    script:
+        "./max_batch_size.py"
+
+
+rule plot_max_batch_token_size:
+    input:
+        expand(
+            "reports/tables/max_batch_size_model={model}_inference.csv",
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "15Be"],
+        ),
+    output:
+        fig="reports/figures/max_batch_size.svg",
+    notebook:
+        "./plot_max_batch_size.py.ipynb"
+
+
+rule inference_on_human:
+    input:
+        config["fasta"].format(uniprot="human") + ".fai",
+        fasta=config["fasta"].format(uniprot="human"),
+        model=model,
+    threads: 16
+    output:
+        runtime="reports/tables/inference_time_on_human_model={model}.txt",
+    script:
+        "./inference_on_human.py"
+
+
+rule inference_on_human_plot:
+    input:
+        runtime_efficient="reports/tables/inference_time_on_human_model=650Me.txt",
+        runtime_baseline="reports/tables/inference_time_on_human_model=650M.txt",
+    threads: 1
+    output:
+        fig="reports/figures/inference_time_on_human.svg",
+    notebook:
+        "./inference_on_human_plot.py.ipynb"
+
+
+rule all_inference:
+    input:
+        rules.inference_figure_memory.output,
+        rules.inference_figure_runtime.output,
+        rules.batch_size_protein_tokens.output,
+        rules.plot_max_batch_token_size.output,
+        rules.inference_on_human_plot.output,

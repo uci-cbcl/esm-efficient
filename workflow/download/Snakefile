@@ -1,0 +1,205 @@
+rule download_uniprotkb:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz",
+    output:
+        fasta=config["fasta_raw"].format(uniprot="uniprotkb"),
+    shell:
+        'wget -O - "{params.url}" | gunzip -c > {output.fasta}'
+
+
+rule download_uniprot50:
+    params:
+        url="https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref50/uniref50.fasta.gz",
+    output:
+        fasta=protected(config["fasta_raw"].format(uniprot="uniref50")),
+    shell:
+        'wget -O - "{params.url}" | gunzip -c > {output.fasta}'
+
+
+rule download_uniprot90:
+    params:
+        url="https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref90/uniref90.fasta.gz",
+    output:
+        fasta=protected(config["fasta_raw"].format(uniprot="uniref90")),
+    shell:
+        'wget -O - "{params.url}" | gunzip -c > {output.fasta}'
+
+
+rule download_esm2_8M:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t6_8M_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t6_8M_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["8M"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm2_35M:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t12_35M_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t12_35M_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["35M"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm2_150M:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t30_150M_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t30_150M_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["150M"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm2_650M:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t33_650M_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t33_650M_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["650M"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm2_3B:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t36_3B_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t36_3B_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["3B"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm2_15B:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t48_15B_UR50D.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm2_t48_15B_UR50D-contact-regression.pt",
+    output:
+        model=config["esm"]["15B"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm1b:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm1b_t33_650M_UR50S.pt",
+        regression="https://dl.fbaipublicfiles.com/fair-esm/regression/esm1b_t33_650M_UR50S-contact-regression.pt",
+    output:
+        model=config["esm"]["1b"],
+    run:
+        shell(f"wget -O {output.model} {params.model}")
+        regression = output.model.replace(".pt", "-contact-regression.pt")
+        shell(f"wget -O {regression} {params.regression}")
+
+
+rule download_esm1v:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        model="https://dl.fbaipublicfiles.com/fair-esm/models/esm1v_t33_650M_UR90S_{ens}.pt",
+    output:
+        model=config["esm"]["1v"],
+    shell:
+        "wget -O {output.model} {params.model}"
+
+
+rule download_proteingym_substitutions:
+    threads: 1
+    resources:
+        mem_gb=4,
+    params:
+        url="https://marks.hms.harvard.edu/proteingym/DMS_ProteinGym_substitutions.zip",
+    output:
+        directory(config["proteingym"]["substitutions"]),
+    run:
+        download_dir = output[0]
+        shell(
+            f"wget {params.url} -O {download_dir}.zip && unzip {download_dir}.zip -d {download_dir}"
+        )
+
+
+rule download_uniport_go_terms:
+    params:
+        url="https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz",
+    output:
+        txt=config["uniprot"]["txt"],
+    shell:
+        'wget -O - "{params.url}" | gunzip -c > {output.txt}'
+
+
+rule download_deeptfactor:
+    params:
+        url="https://bitbucket.org/kaistsystemsbiology/deeptfactor/raw/7f1bcb451a38102ad1768be39666508f3288acb5/trained_model/DeepTFactor_ckpt.pt",
+    output:
+        model=config["deeptfactor"]["weights"],
+    shell:
+        "wget -O {output.model} {params.url}"
+
+
+rule download_flip_meltome:
+    params:
+        url="https://github.com/J-SNACKKB/FLIP/raw/main/splits/meltome/splits.zip",
+        dir=directory(config["meltome"]["dir"]),
+    output:
+        dataset=config["meltome"]["dataset"],
+    shell:
+        "wget {params.url} -O {params.dir}.zip && unzip {params.dir}.zip -d {params.dir}"
+
+
+rule all_download:
+    input:
+        rules.download_esm2_8M.output,
+        rules.download_esm2_35M.output,
+        rules.download_esm2_150M.output,
+        rules.download_esm2_650M.output,
+        rules.download_esm2_3B.output,
+        rules.download_esm1b.output,
+        expand(rules.download_esm1v.output, ens=[1, 2, 3, 4, 5]),
+        rules.download_uniprotkb.output,
+        rules.download_uniprot50.output,
+        rules.download_uniprot90.output,
+        rules.download_proteingym_substitutions.output,
+        rules.download_uniport_go_terms.output,
+        rules.download_flip_meltome.output,

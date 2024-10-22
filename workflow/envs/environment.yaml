@@ -1,0 +1,31 @@
+channels:
+  - defaults
+  - conda-forge
+  - bioconda
+  - pytorch
+  - nvidia
+
+dependencies:
+  - python
+  - pip
+  - jupyter
+  - notebook
+  - tabix
+  - conda-forge::deepspeed
+  - pytorch::pytorch
+  - pytorch::pytorch-cuda=12.4
+
+  - pip:
+      - cython
+      - snakemake
+      - tqdm
+      - pandas
+      - pyarrow
+      - pyfaidx
+      - polars
+      - scikit-learn
+      - openpyxl
+      - more_itertools
+      - lightning
+      - fair-esm
+      - biopython

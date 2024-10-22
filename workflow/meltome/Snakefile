@@ -1,0 +1,95 @@
+rule finetune_meltome_train:
+    input:
+        model=model,
+        dataset=config["meltome"]["dataset"],
+    threads: 16
+    resources:
+        mem_gb=memory,
+    params:
+        epochs=100,
+        checkpoint_dir=config["meltome"]["checkpoint_dir"].replace(
+            "{lora}/", "{lora}_head={head}/"
+        ),
+    output:
+        lora_weights=config["meltome"]["lora_weights"].replace(
+            ".safetensors", "_head={head}.safetensors"
+        ),
+        head_weights=config["meltome"]["head_weights"].replace(
+            ".safetensors", "_head={head}.safetensors"
+        ),
+    script:
+        "finetune_meltome.py"
+
+
+rule finetune_meltome_test:
+    input:
+        model=model,
+        lora_weights=config["meltome"]["lora_weights"].replace(
+            ".safetensors", "_head={head}.safetensors"
+        ),
+        head_weights=config["meltome"]["head_weights"].replace(
+            ".safetensors", "_head={head}.safetensors"
+        ),
+        dataset=config["meltome"]["dataset"],
+    threads: 16
+    resources:
+        mem_gb=memory,
+    params:
+        device=4,
+    output:
+        predictions=config["meltome"]["predictions"],
+        scatter_test=f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
+    notebook:
+        "test_meltome.py.ipynb"
+
+
+rule meltome_barplot:
+    input:
+        pred=expand(
+            config["meltome"]["predictions"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            lora=["none"],
+            head=["nn"],
+            quantize=["none"],
+            checkpointing=True,
+        ),
+        pred_lora=expand(
+            config["meltome"]["predictions"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            head=["nn"],
+            lora=["16;query,value,output"],
+            quantize=["none"],
+            checkpointing=True,
+        ),
+    output:
+        fig="reports/figures/meltome_barplot.svg",
+        stats="reports/tables/meltome_barplot_stats.tsv",
+    notebook:
+        "figures_meltome.py.ipynb"
+
+
+rule meltome_scatter:
+    input:
+        scatter=f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head=nn.svg".format(
+            model="{model}",
+            lora="16;query,value,output",
+            quantize="none",
+            checkpointing=True,
+        ),
+    output:
+        scatter="reports/figures/meltome_scatter_test_{model}_lora.svg",
+    shell:
+        'cp "{input.scatter}" {output.scatter}'
+
+
+rule all_meltome:
+    input:
+        expand(
+            f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
+            model=["3Be"],
+            lora=["none"],
+            quantize=["none"],
+            checkpointing=True,
+            head=["nn"],
+        ),
+        rules.meltome_barplot.output,

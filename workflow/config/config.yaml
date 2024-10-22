@@ -1,0 +1,69 @@
+fasta_raw: data/resources/uniprot/{uniprot}_raw.fasta
+fasta: data/results/uniprot/{uniprot}.fasta
+
+uniref50_long:
+  train: data/results/uniprot_long/uniref50_long_train.fasta
+  val: data/results/uniprot_long/uniref50_long_val.fasta
+  checkpoint_dir: data/results/uniprot_long/checkpoints/
+
+  checkpoint_dir_1v: data/results/uniprot_long/checkpoints_1v_{ens}/
+
+esm:
+  8M: data/resources/esm/esm2_t6_8M_UR50D.pt
+  35M: data/resources/esm/esm2_t12_35M_UR50D.pt
+  150M: data/resources/esm/esm2_t30_150M_UR50D.pt
+  650M: data/resources/esm/esm2_t33_650M_UR50D.pt
+  3B: data/resources/esm/esm2_t36_3B_UR50D.pt
+  15B: data/resources/esm/esm2_t48_15B_UR50D.pt
+  1b: data/resources/esm/esm1b_t33_650M_UR50S.pt
+  1v: data/resources/esm/esm1v_t33_650M_UR90S_{ens}.pt
+
+safetensor:
+  esm2: data/results/safetensor/{model}.safetensors
+  esm1b: data/results/models/1b/1b.safetensors
+  esm1v: data/results/models/1v/1v_{ens}.safetensors
+
+benchmark:
+  tokens: data/results/uniprotkb_subset_benchmark_tokens.pt
+
+perplexity:
+  uniprotkb: data/results/perplexity/uniprotkb_subset_perplexity_model={model}_q={quantize}_co={cpuoffloading}.csv
+
+proteingym:
+  substitutions: data/resources/proteingym/ProteinGym_substitutions/
+  mask_margin: data/results/proteingym/mask_margin/proteingym={protein}_model={model}_q={quantize}_co={cpuoffloading}.parquet
+  stats: data/results/proteingym/stats/maskmargin_spearman_model={model}_q={quantize}_co={cpuoffloading}.csv
+  scatter: data/results/proteingym/scatter/maskmargin_scatter_model={model}_q={quantize}_co={cpuoffloading}/
+
+uniprot:
+  txt: data/resources/uniprot/uniprot_sprot.dat
+
+meltome:
+  dir: data/resources/meltome/
+  dataset: data/resources/meltome/splits/mixed_split.csv
+
+  lora_weights: data/results/meltome/_lora_model={model}_q={quantize}_c={checkpointing}_lora={lora}.safetensors
+  head_weights: data/results/meltome/_head_model={model}_q={quantize}_c={checkpointing}_lora={lora}.safetensors
+  checkpoint_dir: data/results/meltome/checkpoints/model={model}_q={quantize}_c={checkpointing}_lora={lora}/
+
+  predictions: data/results/meltome/predictions/model={model}_q={quantize}_c={checkpointing}_lora={lora}_head={head}.csv
+
+tf:
+  data:
+    train: data/results/tf/data/tf_train_set.parquet
+    val: data/results/tf/data/tf_val_set.parquet
+    test: data/results/tf/data/tf_test_set.parquet
+
+finetune:
+  lora_weights: data/results/finetune/lora_model={model}_q={quantize}_c={checkpointing}_lora={lora}.safetensors
+  head_weights: data/results/finetune/head_model={model}_q={quantize}_c={checkpointing}_lora={lora}.safetensors
+  checkpoint_dir: data/results/finetune/checkpoints/model={model}_q={quantize}_c={checkpointing}_lora={lora}/
+
+finetune_accelerate:
+  lora_weights: data/results/finetune_accelerate/lora_model={model}_q={quantize}_c={checkpointing}_lora={lora}_accelerate.safetensors
+  head_weights: data/results/finetune_accelerate/head_model={model}_q={quantize}_c={checkpointing}_lora={lora}_accelerate.safetensors
+  checkpoint_dir: data/results/finetune_accelerate/checkpoints/model={model}_q={quantize}_c={checkpointing}_lora={lora}_accelerate/
+
+deeptfactor:
+  weights: data/resources/deeptfactor/DeepTFactor_ckpt.pt
+  prediction: data/results/deeptfactor/tf_test_set_predictions.parquet

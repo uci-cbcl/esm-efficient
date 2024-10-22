@@ -1,0 +1,345 @@
+rule figure_1:
+    input:
+        fig_transformer="reports/drawing/transformer.png",
+        fig_methods="reports/drawing/methods.png",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-1.pdf",
+        fig_png="reports/paper_figures/figure-1.png",
+    run:
+        template = f"{input.fig_transformer},{input.fig_methods}"
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule figure_2:
+    input:
+        fig_runtime="reports/figures/inference_runtime.svg",
+        fig_memory="reports/figures/inference_memory.svg",
+        fig_memory_quantize="reports/figures/inference_memory_quantize.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-2.pdf",
+        fig_png="reports/paper_figures/figure-2.png",
+    run:
+        template = (
+            f"[{input.fig_runtime}],[{input.fig_memory}],[{input.fig_memory_quantize}]"
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule figure_3:
+    input:
+        fig_variant="reports/figures/proteingym_maskmargin_spearman.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-3.pdf",
+        fig_png="reports/paper_figures/figure-3.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig_variant} -o {output.fig_pdf}")
+        shell(
+            f"cairosvg --dpi 300 -W {params.width} {input.fig_variant} -o {output.fig_png}"
+        )
+
+
+rule figure_4:
+    input:
+        fig_memory="reports/figures/train_memory.svg",
+        fig_runtime="reports/figures/train_runtime.svg",
+        fig_lora="reports/figures/train_runtime_finetune.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-4.pdf",
+        fig_png="reports/paper_figures/figure-4.png",
+    run:
+        template = f"[{input.fig_memory}],[{input.fig_runtime},{input.fig_lora}]"
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule figure_5:
+    input:
+        fig_melting="reports/figures/meltome_scatter_test_model=3Be_q=none_c=True_lora=none_head=nn.svg",
+        fig_bar="reports/figures/meltome_barplot.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-5.pdf",
+        fig_png="reports/paper_figures/figure-5.png",
+    run:
+        template = f"{input.fig_melting},{input.fig_bar}"
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule figure_6:
+    input:
+        fig_roc="reports/figures/tf_roc_performance.svg",
+        fig_bar="reports/figures/tf_roc_performance_barplot.svg",
+        fig_pr="reports/figures/tf_precision_recall_performance.svg",
+        fig_pr_bar="reports/figures/tf_precision_recall_performance_barplot.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/paper_figures/figure-6.pdf",
+        fig_png="reports/paper_figures/figure-6.png",
+    run:
+        template = (
+            f"[{input.fig_roc},{input.fig_bar}][{input.fig_pr},{input.fig_pr_bar}]"
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule sup_figure_1:
+    input:
+        fig_hist="reports/figures/uniprot_human_hist.svg",
+        fig_cdf="reports/figures/uniprot_human_cdf.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-1.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-1.png",
+    run:
+        template = f"{input.fig_hist},{input.fig_cdf}"
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule sup_figure_2:
+    input:
+        fig_protein="reports/figures/batch_size_protein.svg",
+        fig_tokens="reports/figures/batch_size_tokens.svg",
+    params:
+        fontsize=42,
+        width=1200,
+        lettercase="upper",
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-2.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-2.png",
+    run:
+        template = f"[{input.fig_protein}],[{input.fig_tokens}]"
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
+        )
+
+
+rule sup_figure_3:
+    input:
+        fig="reports/figures/max_batch_size.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-3.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-3.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_4:
+    input:
+        fig="reports/figures/inference_time_on_human.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-4.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-4.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_5:
+    input:
+        fig="reports/figures/inference_runtime_quantize.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-5.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-5.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_6:
+    input:
+        fig="reports/figures/train_memory_length_batch.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-6.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-6.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_7:
+    input:
+        fig="reports/figures/train_memory_deepspeed.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-7.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-7.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_8:
+    input:
+        fig="reports/figures/train_runtime_estimate_uniprot50.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-8.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-8.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_figure_9:
+    input:
+        fig="reports/figures/proteingym_maskmargin_spearman_scatter.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-9.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-9.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
+rule sup_table:
+    input:
+        tables=[
+            "reports/tables/inference_memory.csv",
+            "reports/tables/inference_runtime.csv",
+            "reports/tables/proteingym_maskmargin_spearman.csv",
+            "reports/tables/train_memory.csv",
+            "reports/tables/train_runtime_stats.csv",
+            "reports/tables/meltome_barplot_stats.tsv",
+            "reports/tables/tf_roc_performance.tsv",
+            "reports/tables/tf_precision_recall_performance.tsv",
+            "workflow/config/tf_go_terms.txt",
+        ],
+    output:
+        excel="reports/supp_tables.xlsx",
+    script:
+        "./sup_table.py"
+
+
+rule all_figures:
+    input:
+        rules.figure_2.output,
+        rules.figure_3.output,
+        rules.figure_4.output,
+        rules.figure_5.output,
+        rules.figure_6.output,
+        rules.sup_figure_1.output,
+        rules.sup_figure_2.output,
+        rules.sup_figure_3.output,
+        rules.sup_figure_4.output,
+        rules.sup_figure_5.output,
+        rules.sup_figure_6.output,
+        rules.sup_figure_7.output,
+        rules.sup_figure_8.output,
+        rules.sup_figure_9.output,
+        rules.sup_table.output,
+        # rules.figure_1.output,

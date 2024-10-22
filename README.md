@@ -1,0 +1,108 @@
+# ESM-Efficient 
+
+Efficient implementatin of ESM family of models.
+
+# Installation
+
+```
+conda install pytorch cudatoolkit=12.5 -c pytorch -c nvidia
+pip install flash-attn --no-build-isolation
+pip install esm-efficient
+```
+
+# Usage
+
+Predict the log probabilities of a sequence of tokens using the model. 
+
+```python
+import torch
+from esme import ESM2
+from esme.alphabet import tokenize
+
+# create load the model
+model = ESM2.from_pretrained("{model}.safetensors", device=0)
+
+tokens = tokenize(['MEEPQSDPSVEPPLSQESTFSLDLWK', 'MADQLTEEQIAEFKEAFSLFDKDG'])
+tokens = tokens.to(0)
+
+# predict logits
+logits = model(tokens)
+# logits.shape = (2, seq_len, embed_size)
+
+# predict log probabilities
+log_probs = model.predict_log_prob(tokens)
+# log_probs.shape = (2, seq_len, embed_size)
+
+from esme.alphabet import tokenize_unpad
+# tokenize without padding (more efficient avoids calculating with padding)
+tokens, indices, cu_lens, max_len = tokenize_unpad(['MEEPQSDPSVEPPLSQETFSDLWK', 'MADQLTEEQIAEFKEAFSLFDKDG'])
+tokens = tokens.to(0)
+cu_lens = cu_lens.to(0)
+log_probs = model.predict_log_prob(tokens, (cu_lens, max_len))
+# log_probs.shape = (seq_len_protein1 + seq_len_protein2, embed_size)
+```
+
+Predict effect of variants:
+```python
+
+from esme.variant import predict_mask_margin
+
+seq = 'MEEPQSDPSVEPPLSQETFSDLWK'
+df = predict_mask_margin(model, seq)
+# ... pd.DataFrame({
+# ...    'variant': ['M1A', 'M1C', ..., 'P16Y'],
+# ...    'score': [-0.1, -0.2, ..., -0.3]
+# ... }).set_index('variant')
+```
+
+Fine-tune the model with lora adapters:
+```python
+
+# only add will be trained by default
+model.add_lora(rank=16, layers=('query', 'key', 'value'), adapter_names=['adapter1', 'adapter2'])
+
+# mark only lora as trainable called by default when adding lora
+model.mark_only_lora_as_trainable()
+
+# save the model with the lora weights
+model.save_lora('<path>.safetensors', adapter_names=['adapter1'])
+
+# load the model with the lora weights
+model.load_lora('<path>.safetensors')
+```
+
+Quantization of the model:
+```python
+model = ESM2.from_pretrained('8M.safetensors', quantization='4bit', device=0)
+```
+
+Activation checkpointing of each transformer layer:
+```python
+model = ESM2.from_pretrained('8M.safetensors', checkpointing=True)
+```
+
+# Model Weights
+
+The model weights can be downloaded from the HuggingFace: [https://huggingface.co/mhcelik/esm-efficient](https://huggingface.co/mhcelik/esm-efficient)
+
+# Evaluation 
+
+To perform the evaluation reported in the paper, run the following command:
+
+```bash
+snakemake -n --use-conda
+```
+
+This will download the data, train the models, and evaluate them. The results will be saved in the `results` directory.
+See the `workflow/Snakefile` for more details.
+
+To generate a specific figures in the paper, run the following command:
+```bash
+snakemake reports/paper_figures/figure-2.pdf -n --use-conda 
+```
+
+
+# Citation
+```bib
+
+```

@@ -1,0 +1,166 @@
+rule finetune_dataset_go_terms:
+    input:
+        uniprot=config["uniprot"]["txt"],
+        tf_go_terms="workflow/config/tf_go_terms.txt",
+    output:
+        train=config["tf"]["data"]["train"],
+        val=config["tf"]["data"]["val"],
+        test=config["tf"]["data"]["test"],
+    script:
+        "./go_terms.py"
+
+
+rule predict_deeptfactor:
+    input:
+        weights=config["deeptfactor"]["weights"],
+        test=config["tf"]["data"]["test"],
+    threads: 16
+    resources:
+        mem_gb=64,
+    params:
+        device=gpu_device,
+    output:
+        precision_recall="reports/tables/deeptfactor_precision_recall.csv",
+        roc="reports/tables/deeptfactor_roc.csv",
+    script:
+        "deeptfactor.py"
+
+
+rule finetune_train:
+    input:
+        model=model,
+        fasta=config["fasta"].format(uniprot="uniprotkb"),
+        train=config["tf"]["data"]["train"],
+        val=config["tf"]["data"]["val"],
+        test=config["tf"]["data"]["test"],
+    threads: 16
+    resources:
+        mem_gb=memory,
+    params:
+        epochs=100,
+        checkpoint_dir=config["finetune"]["checkpoint_dir"],
+    output:
+        lora_weights=config["finetune"]["lora_weights"],
+        head_weights=config["finetune"]["head_weights"],
+    script:
+        "finetune.py"
+
+
+rule finetune_predict_testset:
+    input:
+        model=model,
+        lora_weights=config["finetune"]["lora_weights"],
+        head_weights=config["finetune"]["head_weights"],
+        train=config["tf"]["data"]["train"],
+        val=config["tf"]["data"]["val"],
+        test=config["tf"]["data"]["test"],
+    threads: 4
+    resources:
+        mem_gb=memory,
+    params:
+        device=0,
+        batch_size=32,
+    output:
+        precision_recall=f"reports/tables/tf_precision_recall_{finetune_wildcards}.csv",
+        roc=f"reports/tables/tf_roc_{finetune_wildcards}.csv",
+    script:
+        "predict.py"
+
+
+rule finetune_plot_tf_performance:
+    input:
+        deepfactor_pr="reports/tables/deeptfactor_precision_recall.csv",
+        deepfactor_roc="reports/tables/deeptfactor_roc.csv",
+        pr=f"reports/tables/tf_precision_recall_{finetune_wildcards}.csv".format(
+            model="{model}", lora="none", quantize="none", checkpointing=True
+        ),
+        roc=f"reports/tables/tf_roc_{finetune_wildcards}.csv".format(
+            model="{model}", lora="none", quantize="none", checkpointing=True
+        ),
+        pr_lora=f"reports/tables/tf_precision_recall_{finetune_wildcards}.csv".format(
+            model="{model}", lora="{lora}", quantize="none", checkpointing=True
+        ),
+        roc_lora=f"reports/tables/tf_roc_{finetune_wildcards}.csv".format(
+            model="{model}", lora="{lora}", quantize="none", checkpointing=True
+        ),
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        roc="reports/figures/tf_roc_performance_model={model}_lora={lora}.svg",
+        precision_recall="reports/figures/tf_precision_recall_performance_model={model}_lora={lora}.svg",
+    notebook:
+        "tf_performance.py.ipynb"
+
+
+rule tf_barplot:
+    input:
+        deepfactor_pr="reports/tables/deeptfactor_precision_recall.csv",
+        deepfactor_roc="reports/tables/deeptfactor_roc.csv",
+        pr=expand(
+            f"reports/tables/tf_precision_recall_{finetune_wildcards}.csv",
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            lora=["none"],
+            quantize="none",
+            checkpointing=True,
+        ),
+        roc=expand(
+            f"reports/tables/tf_roc_{finetune_wildcards}.csv",
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            lora=["none"],
+            quantize="none",
+            checkpointing=True,
+        ),
+        pr_lora=expand(
+            f"reports/tables/tf_precision_recall_{finetune_wildcards}.csv",
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            lora=["16;query,value,output"],
+            quantize="none",
+            checkpointing=True,
+        ),
+        roc_lora=expand(
+            f"reports/tables/tf_roc_{finetune_wildcards}.csv",
+            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            lora=["16;query,value,output"],
+            quantize="none",
+            checkpointing=True,
+        ),
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        roc="reports/figures/tf_roc_performance_barplot.svg",
+        table_roc="reports/tables/tf_roc_performance.tsv",
+        precision_recall="reports/figures/tf_precision_recall_performance_barplot.svg",
+        table_precision_recall="reports/tables/tf_precision_recall_performance.tsv",
+    notebook:
+        "tf_barplot.py.ipynb"
+
+
+rule tf_roc_curve:
+    input:
+        roc="reports/figures/tf_roc_performance_model={model}_lora={lora}.svg".format(
+            model="650Me",
+            lora="16;query,value,output",
+        ),
+    output:
+        roc="reports/figures/tf_roc_performance.svg",
+    shell:
+        'cp "{input.roc}" {output.roc}'
+
+
+rule tf_pr_curve:
+    input:
+        pr="reports/figures/tf_precision_recall_performance_model={model}_lora={lora}.svg".format(
+            model="3Be",
+            lora="16;query,value,output",
+        ),
+    output:
+        pr="reports/figures/tf_precision_recall_performance.svg",
+    shell:
+        'cp "{input.pr}" {output.pr}'
+
+
+rule all_tf:
+    input:
+        rules.tf_barplot.output,
