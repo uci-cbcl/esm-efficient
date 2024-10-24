@@ -63,5 +63,9 @@ def test_MaskMarginDataset():
 def test_predict_pseudoperplexity(flash_esm2, esm2_model):
 
     pps = predict_pseudoperplexity(flash_esm2, calm1_human)
-    # _pps = predict_pseudoperplexity(esm2_model, calm1_human)
-    assert pps > 1
+    _pps = predict_pseudoperplexity(esm2_model, calm1_human)
+    assert _pps + 1 > pps
+
+    pps = predict_pseudoperplexity(flash_esm2, p53_human)
+    _pps = predict_pseudoperplexity(esm2_model, p53_human)
+    assert _pps > pps

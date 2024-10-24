@@ -382,21 +382,21 @@ class MaskedFastaTokenDataModule(L.LightningDataModule):
 
         self.current_epoch = 0
 
-    def _dataloder(self, fasta, shuffle=False):
+    def _dataloder(self, fasta, fai=None, shuffle=False):
         return MaskedFastaTokenDataset(
-            fasta, self.token_per_batch, max_len=self.max_len,
+            fasta, fai=fai, token_per_batch=self.token_per_batch, max_len=self.max_len,
             mask_freq=self.mask_freq, alter_freq=self.alter_freq,
             shuffle=shuffle, random_state=self.current_epoch
         ).to_dataloader(num_workers=self.num_workers)
 
     def train_dataloader(self):
-        return self._dataloder(self.train_fasta)
+        return self._dataloder(self.train_fasta, self.train_fai, shuffle=True)
 
     def val_dataloader(self):
-        return self._dataloder(self.val_fasta)
+        return self._dataloder(self.val_fasta, self.val_fai)
 
     def test_dataloader(self):
-        return self._dataloder(self.test_fasta)
+        return self._dataloder(self.test_fasta, self.test_fai)
 
     def set_epoch(self, epoch):
         self.current_epoch = epoch

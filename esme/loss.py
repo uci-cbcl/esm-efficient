@@ -19,6 +19,7 @@ def nll_loss(log_probs, tokens, mask, nll_loss_kwargs=None):
     '''
     log_probs = log_probs.view(-1, log_probs.size(-1))
     targets = tokens.view(-1)
+    mask = mask.view(-1)
 
     log_probs = log_probs[mask]
     targets = targets[mask]

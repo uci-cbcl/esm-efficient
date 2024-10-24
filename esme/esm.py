@@ -7,7 +7,7 @@ from flash_attn.bert_padding import pad_input, unpad_input
 from esme.head import RobertaLMHead
 from esme.quantization import Linear8bit
 from esme.attention import FlashTransformerLayer
-from esme.alphabet import padding_idx
+from esme.alphabet import padding_idx, mask_idx
 from esme.embedding import LearnedPositionalEmbedding
 from esme.lora import LoRA, mark_only_lora_as_trainable, lora_state_dict
 from esme.deepspeed import import_deepseed, DEEPSPEED_STAGE2_CONFIG
@@ -164,6 +164,7 @@ class ESM2(nn.Module):
                 (batch, seq_len, embed_dim) or (batch * seq_len, embed_dim)
         '''
         x = self.embed_scale * self.embed_tokens(tokens)
+        x.masked_fill_((tokens == mask_idx).unsqueeze(-1), .0)
 
         if tokens.ndim == 2:
             x = torch.where(~tokens.eq(padding_idx).unsqueeze(-1),
