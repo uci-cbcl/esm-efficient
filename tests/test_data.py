@@ -1,7 +1,8 @@
 import pytest
 import torch
 from esme.alphabet import tokenize
-from esme.data import read_fai, TokenSizeBatchSampler, FastaDataset, FastaTokenDataset
+from esme.data import read_fai, TokenSizeBatchSampler, FastaDataset, \
+    FastaTokenDataset, MaskedFastaDataset
 from conftest import fai_path, fasta_path
 
 
@@ -92,3 +93,15 @@ def test_FastaDataset_token_per_batch(fasta_token_dataset):
 
     for token, (cu_lens, max_len) in dl:
         assert token.shape[0] <= 1500
+
+
+def test_MaskedFastaDataset():
+    ds = MaskedFastaDataset(fasta_path)
+    token, mtokens, mask = ds[0]
+    assert token[~mask].eq(mtokens[~mask]).all()
+    assert not token[mask].eq(mtokens[mask]).all()
+
+    dl = ds.to_dataloader(batch_size=4)
+    token, mtokens, mask = next(iter(dl))
+    assert token[~mask].eq(mtokens[~mask]).all()
+    assert not token[mask].eq(mtokens[mask]).all()

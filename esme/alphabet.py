@@ -114,11 +114,11 @@ def tokenize_unpad(sequences: Union[List[str], str]) -> Tuple[Tensor, Tensor, Te
     max_len = max(lens)
 
     tokens = torch.zeros(cu_lens[-1], dtype=torch.int64)
-    indices  = torch.cat([
+    indices = torch.cat([
         torch.arange(i * max_len, i * max_len + l, dtype=torch.int64)
         for i, l in enumerate(lens)
     ])
-    
+
     for cu_low, cu_high, seq in zip(cu_lens[:-1], cu_lens[1:], sequences):
         tokens[cu_low:cu_high] = torch.tensor([
             cls_idx,
@@ -132,13 +132,13 @@ def tokenize_unpad(sequences: Union[List[str], str]) -> Tuple[Tensor, Tensor, Te
 def pad_tokens(tokens: List[torch.Tensor]):
     '''
     Pad a list of tokens to the same length by adding padding tokens.
-    
+
     Args:
         tokens (List[Tensor]): A list of tokens.
-        
+
     Returns:
         Tensor: A tensor of padded tokens.
-        
+
     Example:
         >>> pad_tokens([torch.tensor([1, 2, 3]), torch.tensor([1, 2, 3, 4, 5])])
         ... tensor([[1, 2, 3, 1, 1],

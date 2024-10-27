@@ -27,7 +27,7 @@ class ESM2(nn.Module):
     Efficient implementation of the ESM-2 model. Leverages the flash-attn library
     for efficient attention computation. Partition-wise attention is used to
     reduce the memory footprint of the model.
-    
+
     Args:
         num_layers: int - the number of transformer layers
         embed_dim: int - the embedding dimension
@@ -36,7 +36,7 @@ class ESM2(nn.Module):
         cpuoffload: bool - whether to offload the model to the cpu
         rotary_embedding: bool - whether to use rotary embeddings
         dtype: torch.dtype - the datatype of the
-        
+
     Attributes:
         num_layers: int - the number of transformer layers
         embed_dim: int - the embedding dimension
@@ -48,7 +48,7 @@ class ESM2(nn.Module):
         layers: nn.ModuleList - the transformer layers
         emb_layer_norm_after: nn.LayerNorm - the layer norm after the embeddings
         lm_head: RobertaLMHead - the head of the model
-    
+
     Methods:
         tie_weights: Tie the weights of the head to the embedding
         untie_weights: Untie the weights of the head from the embedding
@@ -66,24 +66,24 @@ class ESM2(nn.Module):
         save_lora: Save the LoRA adapters to a safetensors file
         load_lora: Load LoRA adapters from a safetensors file
         mark_lmhead: Mark the head of the model as trainable
-        
+
     Examples:
         >>> model = ESM2.from_pretrained('8M.safetenors')
         >>> model.forward(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
-        
+
         >>> model.forward_representation(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3, ...], [0.2, 0.3, 0.4, ...], [0.3, 0.4, 0.5 ...]])
 
         >>> model.predict_log_prob(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
-        
+
         >>> model.predict_prob(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
 
         >>> model.add_lora(rank=16, alpha=16, layers=('query', 'value', 'output'))
         >>> model.
-        
+
     '''
 
     def __init__(
@@ -154,11 +154,11 @@ class ESM2(nn.Module):
     def embedding(self, tokens):
         '''
         Get the embeddings given the tokens.
-        
+
         Args:
             tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
                 or (batch * seq_len)
-                
+
         Returns:
             x: torch.Tensor - the embeddings of the tokens with shape 
                 (batch, seq_len, embed_dim) or (batch * seq_len, embed_dim)
@@ -233,7 +233,7 @@ class ESM2(nn.Module):
         '''
         Forward pass through the model with the head to get the log probabilities
         of the tokens.
-        
+
         Args:
             tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
             pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
@@ -247,7 +247,7 @@ class ESM2(nn.Module):
         '''
         Forward pass through the model with the head to get the probabilities
         of the tokens.
-        
+
         Args:
             tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
             log: bool - whether to return the log probabilities
@@ -459,7 +459,7 @@ class ESM2(nn.Module):
                  dropout_p=0., adapter_names=None):
         '''
         Add LoRA adapters to the model.
-    
+
         Args:
             rank: int - the rank of the LoRA adapters
             alpha: int - the alpha of the LoRA adapters
@@ -508,7 +508,7 @@ class ESM2(nn.Module):
     def mark_only_lora_as_trainable(self, adapter_names=None):
         '''
         Mark only the LoRA adapters as trainable.
-        
+
         Args:
             adapter_names: list - the names of the adapters to mark as trainable.
         '''
@@ -581,7 +581,7 @@ class ESM2(nn.Module):
 class ESM1b(ESM2):
     '''
     ESM-1b model with 33 transformer layers, 1280 embedding dimension, and 20 attention heads.
-    
+
     Args:
         checkpointing: bool - whether to use checkpointing for memory optimization
         cpuoffload: bool - whether to offload the model to the cpu
@@ -637,7 +637,7 @@ class ESM1b(ESM2):
 class ESM1v(ESM2):
     '''
     ESM-1v model with 33 transformer layers, 1280 embedding dimension, and 20 attention heads.
-    
+
     Args:
         checkpointing: bool - whether to use checkpointing for memory optimization
         cpuoffload: bool - whether to offload the model to the cpu

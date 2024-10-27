@@ -191,7 +191,7 @@ def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32, max_len=None)
     else:
         raise ValueError('seq must be str or DataLoader')
 
-    perplexity = Perplexity()
+    perplexity = Perplexity().to(device)
 
     model.eval()
     with torch.no_grad():
