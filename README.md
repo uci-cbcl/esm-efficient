@@ -103,6 +103,18 @@ snakemake reports/paper_figures/figure-2.pdf -n --use-conda
 
 
 # Citation
+Manuscript for the efficient implementation: [https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1](https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1)
 ```bib
-
+@article {Celik2024.10.22.619563,
+    author = {Celik, Muhammed Hasan and Xie, Xiaohui},
+    title = {Efficient Inference, Training, and Fine-tuning of Protein Language Models},
+    elocation-id = {2024.10.22.619563},
+    year = {2024},
+    doi = {10.1101/2024.10.22.619563},
+    publisher = {Cold Spring Harbor Laboratory},
+    URL = {https://www.biorxiv.org/content/early/2024/10/25/2024.10.22.619563},
+    eprint = {https://www.biorxiv.org/content/early/2024/10/25/2024.10.22.619563.full.pdf},
+    journal = {bioRxiv}
+}
 ```
+Also, cite original ESM papers for the related model: [https://github.com/facebookresearch/esm](https://github.com/facebookresearch/esm)
