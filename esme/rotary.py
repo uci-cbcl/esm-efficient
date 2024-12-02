@@ -1,41 +1,73 @@
-# Adapted from flash_attn trition based rotary to suppport variable sequence length
-# https://github.com/Dao-AILab/flash-attention/blob/main/flash_attn/layers/rotary.py
 from typing import Tuple, Union
 import torch
-from flash_attn.ops.triton.rotary import apply_rotary
+
+
+def culen_indices(cu_lens: torch.Tensor):
+    lengths = cu_lens[1:] - cu_lens[:-1]
+    device = cu_lens.device
+
+    starts = torch.cat(
+        [torch.tensor([0], device=device), lengths.cumsum(0)[:-1]])
+    ids = torch.repeat_interleave(torch.arange(
+        len(lengths), device=device), lengths)
+    positions = torch.arange(cu_lens[-1], device=device)
+    return positions - starts[ids]
+
+
+def rotate_half(x):
+    x1, x2 = x.chunk(2, dim=-1)
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary(
+    x: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    cu_lens: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Apply rotary embeddings using torch.scatter_.
+
+    Args:
+        x: Input tensor of shape (total_seq_len, nheads, headdim).
+        cos: Cosine embeddings of shape (max_seqlen, rotary_dim).
+        sin: Sine embeddings of shape (max_seqlen, rotary_dim).
+        cu_seqlens: Cumulative lengths tensor of shape (batch_size + 1).
+        max_seqlen: Maximum sequence length in the batch.
+        rotary_dim: Dimension for rotary embeddings.
+        inplace: If True, modifies `x` in-place.
+    Returns:
+        Rotated tensor of shape (total_seq_len, nheads, headdim).
+    """
+    indices = culen_indices(cu_lens)
+    return x * cos[indices].unsqueeze(1) + rotate_half(x) * sin[indices].unsqueeze(1)
 
 
 class ApplyRotaryEmbQKV_(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, qkv, cos, sin, cu_seqlens, max_seqlen):
-        q, k = qkv[:, 0], qkv[:, 1]
+    def forward(ctx, qkv, cos, sin, cu_lens):
+        q, k, v = qkv[:, 0], qkv[:, 1], qkv[:, 2]
 
-        apply_rotary(q, cos, sin, cu_seqlens=cu_seqlens,
-                     max_seqlen=max_seqlen, inplace=True)
-        apply_rotary(k, cos, sin, cu_seqlens=cu_seqlens,
-                     max_seqlen=max_seqlen, inplace=True)
+        q_r = apply_rotary(q, cos, sin, cu_lens)
+        q_k = apply_rotary(k, cos, sin, cu_lens)
 
-        ctx.save_for_backward(cos, sin, cu_seqlens)
-        ctx.max_seqlen = max_seqlen
+        ctx.save_for_backward(cos, sin, cu_lens)
 
-        return qkv
+        return torch.stack([q_r, q_k, v], dim=1)
 
     @staticmethod
     def backward(ctx, dqkv):
-        max_seqlen = ctx.max_seqlen
-        cos, sin, cu_seqlens = ctx.saved_tensors
+        cos, sin, cu_lens = ctx.saved_tensors
 
-        dq, dk = dqkv[:, 0], dqkv[:,  1]
+        dq, dk, dv = dqkv[:, 0], dqkv[:, 1], dqkv[:, 2]
 
-        apply_rotary(dq, cos, sin, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen,
-                     inplace=True, conjugate=True)
-        apply_rotary(dk, cos, sin, cu_seqlens=cu_seqlens, max_seqlen=max_seqlen,
-                     inplace=True, conjugate=True)
+        dq_r = apply_rotary(dq, cos, sin, cu_lens)
+        dk_r = apply_rotary(dk, cos, sin, cu_lens)
 
-        return dqkv, None, None, None, None
+        return torch.stack([dq_r, dk_r, dv], dim=1), None, None, None, None
 
 
-def apply_rotary_emb_qkv_(qkv, cos, sin, cu_seqlens: torch.Tensor, max_seqlen: int) -> torch.Tensor:
+def apply_rotary_emb_qkv_(qkv, cos, sin, cu_lens: torch.Tensor) -> torch.Tensor:
     """
     Apply rotary embedding *inplace* to the first rotary_dim of Q and K.
 
@@ -47,7 +79,7 @@ def apply_rotary_emb_qkv_(qkv, cos, sin, cu_seqlens: torch.Tensor, max_seqlen: i
     Return:
         qkv: (batch_size * seqlen, 3, nheads, headdim)
     """
-    return ApplyRotaryEmbQKV_.apply(qkv, cos, sin, cu_seqlens, max_seqlen)
+    return ApplyRotaryEmbQKV_.apply(qkv, cos, sin, cu_lens)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -116,10 +148,11 @@ class RotaryEmbedding(torch.nn.Module):
                 inv_freq = self.inv_freq
 
             freqs = torch.outer(t, inv_freq)
-            self._cos_cached = torch.cos(freqs).to(dtype)
-            self._sin_cached = torch.sin(freqs).to(dtype)
+            emb = torch.cat((freqs, freqs), dim=-1)
+            self._cos_cached = emb.cos().to(dtype)
+            self._sin_cached = emb.sin().to(dtype)
 
-    def forward(self, qkv: torch.Tensor, cu_seqlens: torch.Tensor, max_seqlen: int) -> torch.Tensor:
+    def forward(self, qkv: torch.Tensor, cu_lens: torch.Tensor, max_len: int) -> torch.Tensor:
         """
         Apply rotary embedding *inplace*.
 
@@ -131,10 +164,7 @@ class RotaryEmbedding(torch.nn.Module):
             qkv: (batch_size * seqlen, 3, nheads, headdim)
         """
         self._update_cos_sin_cache(
-            max_seqlen, device=qkv.device, dtype=qkv.dtype)
+            max_len, device=qkv.device, dtype=qkv.dtype)
 
         return apply_rotary_emb_qkv_(
-            qkv,
-            self._cos_cached, self._sin_cached,
-            cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
-        )
+            qkv, self._cos_cached, self._sin_cached, cu_lens)

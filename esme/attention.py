@@ -51,6 +51,7 @@ class FlashMultiheadAttention(nn.Module):
             Returns:
                 Tensor: The output tensor after applying multihead attention and the output linear layer.
     '''
+
     def __init__(
         self,
         embed_dim: int,
@@ -117,7 +118,7 @@ class FlashMultiheadAttention(nn.Module):
         qkv = self._qkv(x)
 
         if self.rot_emb:
-            self.rot_emb(qkv, cu_lens, max_len)  # inplace operation
+            qkv = self.rot_emb(qkv, cu_lens, max_len)
 
         x = self._attn(qkv, cu_lens, max_len)
         return self.out(x)
@@ -169,7 +170,6 @@ class FlashTransformerLayer(nn.Module):
                 torch.Tensor: The output tensor after applying the transformer layer.
     """
 
-
     def __init__(
         self,
         embed_dim,
@@ -209,7 +209,7 @@ class FlashTransformerLayer(nn.Module):
     def forward(self, x, cu_lens, max_len):
         '''
         Forward pass of the transformer layer.
-        
+
         Args:
             x (torch.Tensor): The input tensor.
             cu_lens (torch.Tensor): Cumulative lengths tensor for packed sequences.

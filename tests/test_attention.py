@@ -65,25 +65,25 @@ def test_q_k_v(embedding, transformer_layer, flash_transformer_layer):
         embedding.transpose(0, 1)).transpose(0, 1)
     output_flash = flash_transformer_layer.self_attn.q(
         embedding.to(torch.bfloat16))
-    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=1e-1)
+    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=5e-2)
     # key
     output = transformer_layer.self_attn.k_proj(
         embedding.transpose(0, 1)).transpose(0, 1)
     output_flash = flash_transformer_layer.self_attn.k(
         embedding.to(torch.bfloat16))
-    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=1e-1)
+    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=5e-2)
     # value
     output = transformer_layer.self_attn.v_proj(
         embedding.transpose(0, 1)).transpose(0, 1)
     output_flash = flash_transformer_layer.self_attn.v(
         embedding.to(torch.bfloat16))
-    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=1e-1)
+    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=5e-2)
     # output
     output = transformer_layer.self_attn.out_proj(
         embedding.transpose(0, 1)).transpose(0, 1)
     output_flash = flash_transformer_layer.self_attn.out(
         embedding.to(torch.bfloat16))
-    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=1e-1)
+    assert torch.allclose(output.to(torch.bfloat16), output_flash, atol=5e-2)
 
 
 def test_qkv(embedding_token, multihead_attention, flash_multihead_attention):
@@ -107,8 +107,8 @@ def test_qkv(embedding_token, multihead_attention, flash_multihead_attention):
     q = rearrange(q, '(b h) s d -> (b s) h d', b=len(cu_lens) - 1)[indices]
     k = rearrange(k, '(b h) s d -> (b s) h d', b=len(cu_lens) - 1)[indices]
 
-    assert torch.allclose(q.to(torch.bfloat16), q_flash, atol=.1)
-    assert torch.allclose(k.to(torch.bfloat16), k_flash, atol=.1)
+    assert torch.allclose(q.to(torch.bfloat16), q_flash, atol=.05)
+    assert torch.allclose(k.to(torch.bfloat16), k_flash, atol=.05)
 
 
 def test_multihead_attention(embedding_token, multihead_attention,
@@ -144,7 +144,7 @@ def test_multihead_attention(embedding_token, multihead_attention,
     assert torch.allclose(sim, torch.ones_like(sim), atol=1e-2)
 
     output = rearrange(output, 'b s e -> (b s) e')[indices]
-    assert torch.allclose(output_flash, output, atol=1e-1)
+    assert torch.allclose(output_flash, output, atol=1e-2)
 
     sim = torch.nn.functional.cosine_similarity(output_flash, output)
     assert torch.allclose(sim, torch.ones_like(sim), atol=1e-2)
@@ -173,5 +173,6 @@ def test_multihead_attention_varlen_len(embedding_token, multihead_attention,
         out = output[i, :seq_len, :].to(torch.bfloat16)
         out_flash = output_flash[i, :seq_len, :]
         sim = torch.nn.functional.cosine_similarity(out, out_flash)
-        assert torch.allclose(out_flash, out, atol=1e-1)
+
+        assert torch.allclose(out_flash, out, atol=5e-3)
         assert torch.allclose(sim, torch.ones_like(sim), atol=1e-2)

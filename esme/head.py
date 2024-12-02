@@ -8,7 +8,7 @@ from esme.pooling import PartitionMeanPool
 class RobertaLMHead(nn.Module):
     """
     Roberta Head to predict amino acid probabilities
-    
+
     Args:
         embed_dim: int, the dimension of the input embeddings
         output_dim: int, the dimension of the output embeddings

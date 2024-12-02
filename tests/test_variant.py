@@ -64,8 +64,8 @@ def test_predict_pseudoperplexity(flash_esm2, esm2_model):
 
     pps = predict_pseudoperplexity(flash_esm2, calm1_human)
     _pps = predict_pseudoperplexity(esm2_model, calm1_human)
-    assert _pps + 1 > pps
+    assert abs(_pps - pps) < .2
 
     pps = predict_pseudoperplexity(flash_esm2, p53_human)
     _pps = predict_pseudoperplexity(esm2_model, p53_human)
-    assert _pps > pps
+    assert abs(_pps - pps) < .2
