@@ -89,7 +89,7 @@ def test_q_k_v(embedding, transformer_layer, flash_transformer_layer):
 def test_qkv(embedding_token, multihead_attention, flash_multihead_attention):
     embedding, token = embedding_token
 
-    x, indices, cu_lens, max_len = unpad_input(
+    x, indices, cu_lens, max_len, _ = unpad_input(
         hidden_states=embedding, attention_mask=~token.eq(1))
 
     qkv = flash_multihead_attention._qkv(x.to(torch.bfloat16))
@@ -126,7 +126,7 @@ def test_multihead_attention(embedding_token, multihead_attention,
         x, x, x, key_padding_mask=token.eq(1),
     )[0].transpose(0, 1).to(torch.bfloat16)
 
-    x, indices, cu_lens, max_len = unpad_input(
+    x, indices, cu_lens, max_len, _ = unpad_input(
         hidden_states=embedding, attention_mask=~token.eq(1))
 
     output_flash = flash_multihead_attention(
@@ -161,7 +161,7 @@ def test_multihead_attention_varlen_len(embedding_token, multihead_attention,
 
     from flash_attn.bert_padding import pad_input, unpad_input
 
-    x_unpad, indices, cu_seqlens, max_seqlen = unpad_input(
+    x_unpad, indices, cu_seqlens, max_seqlen, _ = unpad_input(
         hidden_states=embedding, attention_mask=~token.eq(1))
 
     output_flash = flash_multihead_attention(

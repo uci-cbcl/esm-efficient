@@ -198,7 +198,7 @@ class ESM2(nn.Module):
         else:
             assert tokens.ndim == 2, \
                 'tokens are expected to be padded with shape (batch, seq_len, embed_dim)'
-            x, pad_indices, cu_lens, max_len = unpad_input(
+            x, pad_indices, cu_lens, max_len, _ = unpad_input(
                 hidden_states=x, attention_mask=~tokens.eq(padding_idx))
 
         for layer in self.layers:

@@ -10,7 +10,7 @@ requirements = [
     'tqdm',
     'torch',
     'einops',
-    'flash_attn',
+    'flash_attn>2.6.3',
     'accelerate',
     'pandas',
     'numpy',

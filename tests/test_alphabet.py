@@ -73,7 +73,7 @@ def test_tokenize_unpad():
     embedding_layer = torch.nn.Embedding(33, 32)
     embed = embedding_layer(tokens_pad)
 
-    embed_unpad, _indices, _cu_lens, _max_len = unpad_input(
+    embed_unpad, _indices, _cu_lens, _max_len, _ = unpad_input(
         hidden_states=embed, attention_mask=~tokens_pad.eq(padding_idx))
 
     assert torch.all(embed_unpad == embedding_layer(tokens))
