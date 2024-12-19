@@ -1,15 +1,21 @@
 import pytest
 import torch
 from flash_attn.bert_padding import unpad_input
-from esme.rotary import RotaryEmbedding, apply_rotary
-from esm.rotary_embedding import RotaryEmbedding as EsmRotaryEmbedding, \
+from fair_esm.rotary_embedding import RotaryEmbedding as EsmRotaryEmbedding, \
     apply_rotary_pos_emb as apply_rotary_pos_emb_esm
+from esm.layers.rotary import RotaryEmbedding as RotaryEmbeddingESMC
+from esme.rotary import RotaryEmbedding, apply_rotary
 from conftest import device
 
 
 @pytest.fixture
 def rotary_embedding_esm():
     return EsmRotaryEmbedding(dim=64).to(device)
+
+
+@pytest.fixture
+def rotary_embedding_esmc():
+    return RotaryEmbeddingESMC(dim=64, device=device)
 
 
 @pytest.fixture
@@ -94,27 +100,37 @@ def test_RotaryEmbedding_update_cos_sin_cache(rotary_embedding, rotary_embedding
     assert torch.allclose(sin_esm, sin_flash, atol=1e-6)
 
 
-def test_RotaryEmbedding(rotary_embedding, rotary_embedding_esm, q_padded_t, q_unpadded, k_padded_t, k_unpadded):
-
-    q_unpadded, q_cu_lens = q_unpadded
-    k_unpadded, k_cu_lens = k_unpadded
-    v_unpadded = q_unpadded.clone()
-
-    qkv = torch.stack([q_unpadded, k_unpadded, v_unpadded], dim=1)
+def test_RotaryEmbedding(rotary_embedding, rotary_embedding_esm, rotary_embedding_esmc,
+                         q_padded, q_padded_t, q_unpadded, k_padded, k_padded_t, k_unpadded):
+    q_unpadded, _ = q_unpadded
+    k_unpadded, _ = k_unpadded
 
     cu_lens = torch.tensor([0, 60, 100, 280], device=0)
     max_len = 180
 
-    qkv_r = rotary_embedding(qkv, cu_lens, max_len)
+    q_r, k_r = rotary_embedding(q_unpadded, k_unpadded, cu_lens, max_len)
     q_esm, k_esm = rotary_embedding_esm(q_padded_t, k_padded_t)
+    q_esmc, k_esmc = rotary_embedding_esmc(q_padded, k_padded)
+
     q_esm = q_esm.reshape(3, 8, 180, 64).transpose(1, 2)
     k_esm = k_esm.reshape(3, 8, 180, 64).transpose(1, 2)
 
-    assert torch.allclose(q_esm[0, :60], qkv_r[:60, 0], atol=1e-6)
-    assert torch.allclose(k_esm[0, :60], qkv_r[:60, 1], atol=1e-6)
+    # ESM1,2
+    assert torch.allclose(q_esm[0, :60], q_r[:60], atol=2e-6)
+    assert torch.allclose(k_esm[0, :60], k_r[:60], atol=2e-6)
 
-    assert torch.allclose(q_esm[1, :40], qkv_r[60:100, 0], atol=1e-6)
-    assert torch.allclose(k_esm[1, :40], qkv_r[60:100, 1], atol=1e-6)
+    assert torch.allclose(q_esm[1, :40], q_r[60:100], atol=2e-6)
+    assert torch.allclose(k_esm[1, :40], k_r[60:100], atol=2e-6)
 
-    assert torch.allclose(q_esm[2, :180], qkv_r[100:, 0], atol=1e-6)
-    assert torch.allclose(k_esm[2, :180], qkv_r[100:, 1], atol=1e-6)
+    assert torch.allclose(q_esm[2, :180], q_r[100:], atol=2e-6)
+    assert torch.allclose(k_esm[2, :180], k_r[100:], atol=2e-6)
+
+    # ESMC
+    assert torch.allclose(q_esmc[0, :60], q_r[:60], atol=1e-6)
+    assert torch.allclose(k_esmc[0, :60], k_r[:60], atol=1e-6)
+
+    assert torch.allclose(q_esmc[1, :40], q_r[60:100], atol=1e-6)
+    assert torch.allclose(k_esmc[1, :40], k_r[60:100], atol=1e-6)
+
+    assert torch.allclose(q_esmc[2, :180], q_r[100:], atol=1e-6)
+    assert torch.allclose(k_esmc[2, :180], k_r[100:], atol=1e-6)

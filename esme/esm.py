@@ -1,13 +1,16 @@
+import os
+import math
 import accelerate
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 import safetensors.torch as safetensors
 from flash_attn.bert_padding import pad_input, unpad_input
+from esme.download import download_model, model_names
 from esme.head import RobertaLMHead
 from esme.quantization import Linear8bit
 from esme.attention import FlashTransformerLayer
-from esme.alphabet import padding_idx, mask_idx
+from esme.alphabet import Alphabet, Alphabet3
 from esme.embedding import LearnedPositionalEmbedding
 from esme.lora import LoRA, mark_only_lora_as_trainable, lora_state_dict
 from esme.deepspeed import import_deepseed, DEEPSPEED_STAGE2_CONFIG
@@ -20,6 +23,50 @@ def import_checkpointing(deepspeed=False):
         from torch.utils.checkpoint import checkpoint
         _checkpoint = lambda *args: checkpoint(*args, use_reentrant=False)
     return _checkpoint
+
+
+class ESM(nn.Module):
+
+    @staticmethod
+    def from_pretrained(path, quantization=None, checkpointing=False, device='cpu'):
+        '''
+        Load a pretrained model from a safetensors file.
+
+        Args:
+            path: str - path to the safetensor model file to load from or name of the model.
+            quantization: str - the quantization to use for the model weights.
+                One of(None, '8bit', '4bit').
+            checkpointing: bool - whether to offload the model to the cpu for training.
+            device: str - the device to load the model.
+        '''
+        if not os.path.isfile(path):
+            try:
+                path = download_model(path)
+            except ValueError:
+                raise ValueError(
+                    f'Invalid model name: {path}. Must be one of {model_names}'
+                )
+
+        with safetensors.safe_open(path, "pt") as f:
+            name = f.metadata()['name'].split('_')[0]
+
+        if name == 'esm1b':
+            model = ESM1b.from_pretrained(
+                path, quantization, checkpointing, device)
+        elif name == 'esm1v':
+            model = ESM1v.from_pretrained(
+                path, quantization, checkpointing, device)
+        elif name == 'esm2':
+            model = ESM2.from_pretrained(
+                path, quantization, checkpointing, device)
+        elif name == 'esmc':
+            model = ESMC.from_pretrained(
+                path, quantization, checkpointing, device)
+        else:
+            raise ValueError(
+                f'Invalid model name: {name}. Must be one of {model_names}'
+            )
+        return model
 
 
 class ESM2(nn.Module):
@@ -50,8 +97,6 @@ class ESM2(nn.Module):
         lm_head: RobertaLMHead - the head of the model
 
     Methods:
-        tie_weights: Tie the weights of the head to the embedding
-        untie_weights: Untie the weights of the head from the embedding
         embedding: Get the embeddings of the tokens with the specified scale
         forward_representation: Forward pass through the model without the head
         forward: Forward pass through the model with the head
@@ -68,21 +113,21 @@ class ESM2(nn.Module):
         mark_lmhead: Mark the head of the model as trainable
 
     Examples:
-        >>> model = ESM2.from_pretrained('8M.safetenors')
-        >>> model.forward(torch.tensor([1, 2, 3]))
+        >> > model = ESM2.from_pretrained('8M.safetenors')
+        >> > model.forward(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
 
-        >>> model.forward_representation(torch.tensor([1, 2, 3]))
+        >> > model.forward_representation(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3, ...], [0.2, 0.3, 0.4, ...], [0.3, 0.4, 0.5 ...]])
 
-        >>> model.predict_log_prob(torch.tensor([1, 2, 3]))
+        >> > model.predict_log_prob(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
 
-        >>> model.predict_prob(torch.tensor([1, 2, 3]))
+        >> > model.predict_prob(torch.tensor([1, 2, 3]))
         ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
 
-        >>> model.add_lora(rank=16, alpha=16, layers=('query', 'value', 'output'))
-        >>> model.
+        >> > model.add_lora(rank=16, alpha=16, layers=('query', 'value', 'output'))
+        >> > model.
 
     '''
 
@@ -92,8 +137,8 @@ class ESM2(nn.Module):
         embed_dim: int = 1280,
         attention_heads: int = 20,
         checkpointing: bool = False,
-        cpuoffload: bool = False,
         rotary_embedding: bool = True,
+        dropout: float = 0.,
         dtype=torch.bfloat16,
     ):
         super().__init__()
@@ -101,7 +146,6 @@ class ESM2(nn.Module):
         self.embed_dim = embed_dim
         self.attention_heads = attention_heads
         self.checkpointing = checkpointing
-        self.cpuoffload = cpuoffload
 
         if self.checkpointing:
             self.checkpoint = import_checkpointing(
@@ -110,64 +154,44 @@ class ESM2(nn.Module):
 
         self.embed_scale = 1
         self.embed_tokens = nn.Embedding(33, self.embed_dim, dtype=dtype,
-                                         padding_idx=padding_idx)
+                                         padding_idx=Alphabet.padding_idx)
         layers = [
             FlashTransformerLayer(
                 self.embed_dim,
-                4 * self.embed_dim,
+                4,
                 self.attention_heads,
                 rotary_embedding=rotary_embedding,
+                pre_layernorm=False,
+                bias=True,
+                final_activation='gelu',
+                dropout=dropout,
                 dtype=dtype
             )
             for _ in range(self.num_layers)
         ]
 
-        if self.cpuoffload:
-            hook = None
-            _layers = list()
-            for layer in layers:
-                layer, hook = accelerate.cpu_offload_with_hook(
-                    layer, layer.device, hook)
-                _layers.append(layer)
-            layers = _layers
-
         self.layers = nn.ModuleList(layers)
         self.emb_layer_norm_after = nn.LayerNorm(self.embed_dim, dtype=dtype)
 
-        self.lm_head = RobertaLMHead.from_embedding(
-            self.embed_tokens, dtype=dtype)
-
-    def tie_weights(self):
-        '''
-        Tie the weights of the head to the embedding.
-        '''
-        self.lm_head.weight = self.embed_tokens.weight
-
-    def untie_weights(self):
-        '''
-        Untie the weights of the head from the embedding.
-        Might be needed for checkpointing if saving tied weights might cause issues.
-        '''
-        self.lm_head.weight = nn.Parameter(
-            torch.clone(self.embed_tokens.weight.data))
+        self.lm_head = RobertaLMHead(self.embed_dim, 33, dtype=dtype)
 
     def embedding(self, tokens):
         '''
         Get the embeddings given the tokens.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
                 or (batch * seq_len)
 
         Returns:
-            x: torch.Tensor - the embeddings of the tokens with shape 
+            x: torch.Tensor - the embeddings of the tokens with shape
                 (batch, seq_len, embed_dim) or (batch * seq_len, embed_dim)
         '''
         x = self.embed_scale * self.embed_tokens(tokens)
-        x.masked_fill_((tokens == mask_idx).unsqueeze(-1), .0)
+        x.masked_fill_((tokens == Alphabet.mask_idx).unsqueeze(-1), .0)
 
         if tokens.ndim == 2:
-            x = torch.where(~tokens.eq(padding_idx).unsqueeze(-1),
+            x = torch.where(~tokens.eq(Alphabet.padding_idx).unsqueeze(-1),
                             x, torch.zeros_like(x))
         elif tokens.ndim == 1:
             pass
@@ -183,7 +207,7 @@ class ESM2(nn.Module):
         per token in the sequence.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
             pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
                 maximum length of the sequences
             pad_output: bool - whether to pad the output to the maximum length
@@ -199,7 +223,7 @@ class ESM2(nn.Module):
             assert tokens.ndim == 2, \
                 'tokens are expected to be padded with shape (batch, seq_len, embed_dim)'
             x, pad_indices, cu_lens, max_len, _ = unpad_input(
-                hidden_states=x, attention_mask=~tokens.eq(padding_idx))
+                hidden_states=x, attention_mask=~tokens.eq(Alphabet.padding_idx))
 
         for layer in self.layers:
             if self.checkpointing:
@@ -217,10 +241,10 @@ class ESM2(nn.Module):
     def forward(self, tokens, pad_args=None, pad_output=False, pad_indices=None):
         '''
         Forward pass through the model with the head to get the logits
-        of the tokens. 
+        of the tokens.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
             pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
                 maximum length of the sequences
             pad_output: bool - whether to pad the output to output.
@@ -235,7 +259,7 @@ class ESM2(nn.Module):
         of the tokens.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
             pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
                 maximum length of the sequences
             pad_output: bool - whether to pad the output to output.
@@ -249,7 +273,7 @@ class ESM2(nn.Module):
         of the tokens.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape (batch, seq_len)
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
             log: bool - whether to return the log probabilities
             pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
                 maximum length of the sequences
@@ -261,7 +285,7 @@ class ESM2(nn.Module):
         return torch.softmax(self(tokens, pad_args, pad_output, pad_indices), dim=-1)
 
     @classmethod
-    def create_model(cls, path, cpuoffload=False, checkpointing=False):
+    def create_model(cls, path, checkpointing=False):
         '''
         Create a model from a safetensors file with empty weights.
 
@@ -272,24 +296,27 @@ class ESM2(nn.Module):
         '''
         with safetensors.safe_open(path, "pt") as f:
             metadata = f.metadata()
+            name = metadata['name'].split('_')[0]
+            assert name == cls.__name__.lower(), \
+                f'Invalid weight for the {cls.__name__} model. ' \
+                f'You are trying to load a {name} model weights to a {cls.__name__} model.'
             model = cls(
                 num_layers=int(metadata['num_layers']),
                 embed_dim=int(metadata['embed_dim']),
                 attention_heads=int(metadata['attention_heads']),
-                cpuoffload=cpuoffload, checkpointing=checkpointing
+                checkpointing=checkpointing
             )
         return model
 
     @classmethod
-    def from_pretrained(cls, path, quantization=None, cpuoffload=False,
-                        checkpointing=False, device='cpu') -> 'ESM2':
+    def from_pretrained(cls, path, quantization=None, checkpointing=False, device='cpu') -> 'ESM2':
         '''
         Load a pretrained model from a safetensors file.
 
         Args:
             path: str - path to the safetensor model file to load from
             quantization: str - the quantization to use for the model weights.
-                One of (None, '8bit', '4bit').
+                One of(None, '8bit', '4bit').
             cpuoffload: bool - whether to offload the model to the cpu for training
             checkpointing: bool - whether to use checkpointing for memory optimization
             device: str - the device to load the model.
@@ -302,11 +329,7 @@ class ESM2(nn.Module):
                 'Quantized model cannot be loaded on cpu provide CUDA gpu device'
 
         with accelerate.init_empty_weights():
-            model = cls.create_model(path, cpuoffload=cpuoffload,
-                                     checkpointing=checkpointing)
-        # needed to avoid bug bcs of meta device for shared weights not same
-        # tie weights of the head to the embedding
-        model.tie_weights()
+            model = cls.create_model(path, checkpointing=checkpointing)
 
         if quantization == '8bit':
             model = cls._load_8bit(model, path, device)
@@ -321,41 +344,12 @@ class ESM2(nn.Module):
         return model
 
     @classmethod
-    def _load_8bit_experimental(cls, model, path, device):
-        with safetensors.safe_open(path, framework="pt", device=device) as f:
-            model.embed_tokens.weight = nn.Parameter(
-                f.get_tensor('embed_tokens.weight'))
-
-            for i, _ in enumerate(tqdm(model.layers, desc='Loading layers')):
-                layer = model.layers[i]
-                for j in ['q', 'k', 'v', 'out']:
-                    linaer = Linear8bit(
-                        f.get_tensor(f'layers.{i}.self_attn.{j}.weight'),
-                        f.get_tensor(f'layers.{i}.self_attn.{j}.bias'),
-                        device=device, threshold=6)
-                    setattr(layer.self_attn, j, linaer)
-                for j in ['fc1', 'fc2']:
-                    linear = Linear8bit(
-                        f.get_tensor(f'layers.{i}.{j}.weight'),
-                        f.get_tensor(f'layers.{i}.{j}.bias'),
-                        device=device, threshold=6)
-                    setattr(layer, j, linear)
-                for j in ['final_layer_norm', 'self_attn_layer_norm']:
-                    getattr(layer, j).weight = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.weight'))
-                    getattr(layer, j).bias = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.bias'))
-
-            cls._load_lm_head(model, f)
-
-        return model.to(device)
-
-    @classmethod
     def _load_lm_head(cls, model, f):
         model.emb_layer_norm_after.weight = nn.Parameter(
             f.get_tensor('emb_layer_norm_after.weight'))
-        model.emb_layer_norm_after.bias = nn.Parameter(
-            f.get_tensor('emb_layer_norm_after.bias'))
+        if 'emb_layer_norm_after.bias' in f.keys():
+            model.emb_layer_norm_after.bias = nn.Parameter(
+                f.get_tensor('emb_layer_norm_after.bias'))
 
         model.lm_head.dense.weight = nn.Parameter(
             f.get_tensor('lm_head.dense.weight'))
@@ -366,85 +360,98 @@ class ESM2(nn.Module):
             f.get_tensor('lm_head.layer_norm.weight'))
         model.lm_head.layer_norm.bias = nn.Parameter(
             f.get_tensor('lm_head.layer_norm.bias'))
-        model.lm_head.bias = nn.Parameter(
-            f.get_tensor('lm_head.bias'))
 
-        model.tie_weights()
+        model.lm_head.final.weight = nn.Parameter(
+            f.get_tensor('lm_head.final.weight'))
+        model.lm_head.final.bias = nn.Parameter(
+            f.get_tensor('lm_head.final.bias'))
+
+    @classmethod
+    def _load_layer_norm(cls, layer, idx, sf):
+        getattr(layer.final, '0').weight = nn.Parameter(
+            sf.get_tensor(f'layers.{idx}.final.0.weight'))
+        if f'layers.{idx}.final.0.bias' in sf.keys():
+            getattr(layer.final, '0').bias = nn.Parameter(
+                sf.get_tensor(f'layers.{idx}.final.0.bias'))
+
+        getattr(layer.self_attn, 'norm').weight = nn.Parameter(
+            sf.get_tensor(f'layers.{idx}.self_attn.norm.weight'))
+        if f'layers.{idx}.self_attn.norm.bias' in sf.keys():
+            getattr(layer.self_attn, 'norm').bias = nn.Parameter(
+                sf.get_tensor(f'layers.{idx}.self_attn.norm.bias'))
+
+    @classmethod
+    def _load_linear8bit_experimental(cls, sf, device, weight_key, bias_key=None):
+        return Linear8bit(
+            sf.get_tensor(weight_key),
+            sf.get_tensor(bias_key) if bias_key is not None else None,
+            device=device, threshold=6)
+
+    @classmethod
+    def _load_linear8bit(cls, sf, device, weight_key, bias_key=None):
+        from bitsandbytes.nn import Linear8bitLt
+        weight = sf.get_tensor(weight_key).to(torch.float16)
+        state_dict = {'weight': weight}
+
+        if bias_key is not None:
+            state_dict['bias'] = sf.get_tensor(bias_key).to(torch.float16)
+
+        layer = Linear8bitLt(weight.shape[1], weight.shape[0],
+                             has_fp16_weights=False, bias=bias_key is not None)
+        layer.load_state_dict(state_dict)
+        return layer
+
+    @classmethod
+    def _load_linear4bit(cls, sf, device, weight_key, bias_key=None):
+        from bitsandbytes.nn import Linear4bit
+        weight = sf.get_tensor(weight_key)
+        state_dict = {'weight': weight}
+
+        if bias_key is not None:
+            state_dict['bias'] = sf.get_tensor(bias_key)
+
+        layer = Linear4bit(weight.shape[1], weight.shape[0],
+                           bias=bias_key is not None)
+        layer.load_state_dict(state_dict)
+        return layer.to(device)
+
+    @classmethod
+    def _load_quantize(cls, model, path, device, fn_layer):
+
+        with safetensors.safe_open(path, framework="pt", device='cpu') as sf:
+            model.embed_tokens.weight = nn.Parameter(
+                sf.get_tensor('embed_tokens.weight'))
+
+            for i, _ in enumerate(tqdm(model.layers, desc='Loading layers')):
+                layer = model.layers[i]
+                for j in ['q', 'k', 'v', 'out']:
+                    setattr(layer.self_attn, j, fn_layer(
+                        sf, device,
+                        f'layers.{i}.self_attn.{j}.weight',
+                        f'layers.{i}.self_attn.{j}.bias',
+                    ))
+                for j in ['1', '3']:
+                    setattr(layer.final, j, fn_layer(
+                        sf, device,
+                        f'layers.{i}.final.{j}.weight',
+                        f'layers.{i}.final.{j}.bias',
+                    ))
+                cls._load_layer_norm(layer, i, sf)
+            cls._load_lm_head(model, sf)
+
+        return model.to(device)
+
+    @classmethod
+    def _load_8bit_experimental(cls, model, path, device):
+        return cls._load_quantize(model, path, device, cls._load_linear8bit_experimental)
 
     @classmethod
     def _load_8bit(cls, model, path, device):
-        from bitsandbytes.nn import Linear8bitLt
-
-        with safetensors.safe_open(path, framework="pt", device='cpu') as f:
-            model.embed_tokens.weight = nn.Parameter(
-                f.get_tensor('embed_tokens.weight'))
-
-            for i, _ in enumerate(tqdm(model.layers, desc='Loading layers')):
-                layer = model.layers[i]
-                for j in ['q', 'k', 'v', 'out']:
-                    weight = f.get_tensor(
-                        f'layers.{i}.self_attn.{j}.weight').to(torch.float16)
-                    bias = f.get_tensor(
-                        f'layers.{i}.self_attn.{j}.bias').to(torch.float16)
-
-                    l = Linear8bitLt(
-                        weight.shape[1], weight.shape[0], has_fp16_weights=False)
-                    l.load_state_dict({'weight': weight, 'bias': bias})
-                    setattr(layer.self_attn, j, l)
-                for j in ['fc1', 'fc2']:
-                    weight = f.get_tensor(
-                        f'layers.{i}.{j}.weight').to(torch.float16)
-
-                    bias = f.get_tensor(
-                        f'layers.{i}.{j}.bias').to(torch.float16)
-
-                    l = Linear8bitLt(
-                        weight.shape[1], weight.shape[0], has_fp16_weights=False)
-                    l.load_state_dict({'weight': weight, 'bias': bias})
-                    setattr(layer, j, l)
-                for j in ['final_layer_norm', 'self_attn_layer_norm']:
-                    getattr(layer, j).weight = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.weight'))
-                    getattr(layer, j).bias = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.bias'))
-
-            cls._load_lm_head(model, f)
-
-        return model.to(device)
+        return cls._load_quantize(model, path, device, cls._load_linear8bit)
 
     @classmethod
     def _load_4bit(cls, model, path, device):
-        from bitsandbytes.nn import Linear4bit
-
-        with safetensors.safe_open(path, framework="pt", device='cpu') as f:
-            model.embed_tokens.weight = nn.Parameter(
-                f.get_tensor('embed_tokens.weight'))
-
-            for i, _ in enumerate(tqdm(model.layers, desc='Loading layers')):
-                layer = model.layers[i]
-                for j in ['q', 'k', 'v', 'out']:
-                    weight = f.get_tensor(f'layers.{i}.self_attn.{j}.weight')
-                    bias = f.get_tensor(f'layers.{i}.self_attn.{j}.bias')
-                    l = Linear4bit(weight.shape[1], weight.shape[0])
-                    l.load_state_dict({'weight': weight, 'bias': bias})
-                    l = l.to(device)
-                    setattr(layer.self_attn, j, l)
-                for j in ['fc1', 'fc2']:
-                    weight = f.get_tensor(f'layers.{i}.{j}.weight')
-                    bias = f.get_tensor(f'layers.{i}.{j}.bias')
-                    l = Linear4bit(weight.shape[1], weight.shape[0])
-                    l.load_state_dict({'weight': weight, 'bias': bias})
-                    l = l.to(device)
-                    setattr(layer, j, l)
-                for j in ['final_layer_norm', 'self_attn_layer_norm']:
-                    getattr(layer, j).weight = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.weight'))
-                    getattr(layer, j).bias = nn.Parameter(
-                        f.get_tensor(f'layers.{i}.{j}.bias'))
-
-            cls._load_lm_head(model, f)
-
-        return model.to(device)
+        return cls._load_quantize(model, path, device, cls._load_linear4bit)
 
     def trainable_parameters(self):
         '''
@@ -611,13 +618,13 @@ class ESM1b(ESM2):
 
     @classmethod
     def _load_emb_layer(cls, model, path, device):
-        with safetensors.safe_open(path, framework="pt", device='cpu') as f:
+        with safetensors.safe_open(path, framework="pt", device='cpu') as sf:
             model.emb_layer_norm_before.weight = nn.Parameter(
-                f.get_tensor('emb_layer_norm_before.weight'))
+                sf.get_tensor('emb_layer_norm_before.weight'))
             model.emb_layer_norm_before.bias = nn.Parameter(
-                f.get_tensor('emb_layer_norm_before.bias'))
+                sf.get_tensor('emb_layer_norm_before.bias'))
             model.embed_positions.weight = nn.Parameter(
-                f.get_tensor('embed_positions.weight'))
+                sf.get_tensor('embed_positions.weight'))
 
     @classmethod
     def _load_8bit(cls, model, path, device):
@@ -680,3 +687,189 @@ class ESM1v(ESM2):
     def _load_4bit(cls, model, path, device):
         cls._load_emb_layer(model, path, device)
         return super()._load_4bit(model, path, device)
+
+
+class ESMC(ESM2):
+    '''
+    Efficient implementation of the ESM-3 model. Leverages the flash-attn library
+    for efficient attention computation. Partition-wise attention is used to
+    reduce the memory footprint of the model.
+
+    Args:
+        num_layers: int - the number of transformer layers
+        embed_dim: int - the embedding dimension
+        attention_heads: int - the number of attention heads
+        checkpointing: bool - whether to use checkpointing for memory optimization
+        rotary_embedding: bool - whether to use rotary embeddings
+        dtype: torch.dtype - the datatype of the
+
+    Attributes:
+        num_layers: int - the number of transformer layers
+        embed_dim: int - the embedding dimension
+        attention_heads: int - the number of attention heads
+        checkpointing: bool - whether to use checkpointing for memory optimization
+        embed_scale: float - the scale of the embeddings
+        embed_tokens: nn.Embedding - the embedding layer
+        layers: nn.ModuleList - the transformer layers
+        emb_layer_norm_after: nn.LayerNorm - the layer norm after the embeddings
+        lm_head: RobertaLMHead - the head of the model
+
+    Methods:
+        embedding: Get the embeddings of the tokens with the specified scale
+        forward_representation: Forward pass through the model without the head
+        forward: Forward pass through the model with the head
+        predict_log_prob: Predict the log probabilities of the tokens
+        predict_prob: Predict the probabilities of the tokens
+        create_model: Create a model from a safetensors file with empty weights
+        from_pretrained: Load a pretrained model from a safetensors file
+        trainable_parameters: Get the trainable parameters of the model
+        add_lora: Add LoRA adapters to the model
+        mark_only_lora_as_trainable: Mark only the LoRA adapters as trainable
+        lora_state_dict: Get the state dict of the LoRA adapters
+        save_lora: Save the LoRA adapters to a safetensors file
+        load_lora: Load LoRA adapters from a safetensors file
+        mark_lmhead: Mark the head of the model as trainable
+
+    Examples:
+        >> > model = ESMC.from_pretrained('esmc_300m')
+        >> > model.forward(torch.tensor([1, 2, 3]))
+        ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
+
+        >> > model.forward_representation(torch.tensor([1, 2, 3]))
+        ... tensor([[0.1, 0.2, 0.3, ...], [0.2, 0.3, 0.4, ...], [0.3, 0.4, 0.5 ...]])
+
+        >> > model.predict_log_prob(torch.tensor([1, 2, 3]))
+        ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
+
+        >> > model.predict_prob(torch.tensor([1, 2, 3]))
+        ... tensor([[0.1, 0.2, 0.3], [0.2, 0.3, 0.4], [0.3, 0.4, 0.5]])
+
+        >> > model.add_lora(rank=16, alpha=16, layers=('query', 'value', 'output'))
+        >> > model.
+
+    '''
+
+    def __init__(
+        self,
+        num_layers: int = 30,
+        embed_dim: int = 960,
+        attention_heads: int = 15,
+        checkpointing: bool = False,
+        dropout: float = 0.,
+        dtype=torch.bfloat16,
+    ):
+        super().__init__(
+            num_layers=num_layers,
+            embed_dim=embed_dim,
+            attention_heads=attention_heads,
+            checkpointing=checkpointing,
+            rotary_embedding=True,
+            dropout=dropout,
+            dtype=dtype
+        )
+        self.num_layers = num_layers
+        self.embed_dim = embed_dim
+        self.attention_heads = attention_heads
+        self.checkpointing = checkpointing
+
+        if self.checkpointing:
+            self.checkpoint = import_checkpointing(
+                deepspeed=(checkpointing == 'deepspeed'))
+            self.checkpointing = True
+
+        # TODO
+        self.embed_scale = 1
+        self.embed_tokens = nn.Embedding(64, self.embed_dim, dtype=dtype,
+                                         padding_idx=Alphabet3.padding_idx)
+        layers = [
+            FlashTransformerLayer(
+                self.embed_dim,
+                8 / 3,
+                self.attention_heads,
+                rotary_embedding=True,
+                pre_layernorm=True,
+                bias=False,
+                final_activation='swiglu',
+                residue_scaling=math.sqrt(num_layers / 36),
+                dropout=dropout,
+                dtype=dtype
+            )
+            for _ in range(self.num_layers)
+        ]
+
+        self.layers = nn.ModuleList(layers)
+        self.emb_layer_norm_after = nn.LayerNorm(
+            self.embed_dim, dtype=dtype, bias=False)
+
+        self.lm_head = RobertaLMHead(self.embed_dim, 64, dtype=dtype)
+
+    def forward_representation(self, tokens, pad_args=None, pad_output=False,
+                               pad_indices=None):
+        '''
+        Forward pass through the model without the head to get the representation
+        per token in the sequence.
+
+        Args:
+            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
+            pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
+                maximum length of the sequences
+            pad_output: bool - whether to pad the output to the maximum length
+            pad_indices: torch.Tensor - the indices of the padded tokens
+        '''
+        x = self.embed_tokens(tokens)
+
+        if pad_args is not None:
+            assert tokens.ndim == 1, \
+                'tokens are expected to be unpadded with shape (batch * seq_len)'
+            cu_lens, max_len = pad_args
+        else:
+            assert tokens.ndim == 2, \
+                'tokens are expected to be padded with shape (batch, seq_len, embed_dim)'
+            x, pad_indices, cu_lens, max_len, _ = unpad_input(
+                hidden_states=x, attention_mask=~tokens.eq(Alphabet3.padding_idx))
+
+        for layer in self.layers:
+            if self.checkpointing:
+                x = self.checkpoint(layer, x, cu_lens, max_len)
+            else:
+                x = layer(x, cu_lens, max_len)
+
+        x = self.emb_layer_norm_after(x)
+
+        if pad_output or (pad_args is None):
+            x = pad_input(x, pad_indices, len(cu_lens) - 1, max_len)
+
+        return x
+
+    @classmethod
+    def _load_quantize(cls, model, path, device, fn_layer):
+
+        with safetensors.safe_open(path, framework="pt", device='cpu') as sf:
+            model.embed_tokens.weight = nn.Parameter(
+                sf.get_tensor('embed_tokens.weight'))
+
+            for i, _ in enumerate(tqdm(model.layers, desc='Loading layers')):
+                layer = model.layers[i]
+                for j in ['q', 'k', 'v', 'out']:
+                    setattr(layer.self_attn, j, fn_layer(
+                        sf, device,
+                        f'layers.{i}.self_attn.{j}.weight',
+                    ))
+                for j in ['layernorm_q', 'layernorm_k']:
+                    getattr(layer.self_attn, j).weight = nn.Parameter(
+                        sf.get_tensor(f'layers.{i}.self_attn.{j}.weight'))
+                setattr(layer.final[1], 'activation', fn_layer(
+                    sf, device,
+                    f'layers.{i}.final.1.activation.weight',
+                ))
+                setattr(layer.final[1], 'fc', fn_layer(
+                    sf, device,
+                    f'layers.{i}.final.1.fc.weight',
+                ))
+                setattr(layer.final, '2', fn_layer(
+                    sf, device,
+                    f'layers.{i}.final.2.weight',
+                ))
+                cls._load_layer_norm(layer, i, sf)
+            cls._load_lm_head(model, sf)
+        return model.to(device)

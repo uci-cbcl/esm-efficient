@@ -106,6 +106,7 @@ best_model = MaskedPLM.load_from_checkpoint(
 
 metadata = {
     'format': 'pt',
+    'name': 'esm1v',
     'num_layers': str(model.num_layers),
     'embed_dim': str(model.embed_dim),
     'attention_heads': str(model.attention_heads),

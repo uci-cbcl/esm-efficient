@@ -24,9 +24,9 @@ if efficient:
     strategy = 'ddp'
     device = 0
     model = ESM2.from_pretrained(
-        snakemake.input['model'], 
+        snakemake.input['model'],
         quantization=quantization,
-        checkpointing=checkpointing, 
+        checkpointing=checkpointing,
         device=0 if quantization is not None else 'cpu'
     )
     if lora_kwargs is not None:
@@ -59,15 +59,15 @@ else:
     strategy = 'ddp_find_unused_parameters_true'
     import esm
     model, _ = esm.pretrained.load_model_and_alphabet(snakemake.input['model'])
-    model = model.to(dtype=torch.bfloat16)#.to(device)
+    model = model.to(dtype=torch.bfloat16)  # .to(device)
 
     batch_size = 1
-    
+
     if '8M' == snakemake.wildcards['model']:
         batch_size = 4
-    elif '35M' == snakemake.wildcards['model']: 
+    elif '35M' == snakemake.wildcards['model']:
         batch_size = 4
-    elif '150M' == snakemake.wildcards['model']: 
+    elif '150M' == snakemake.wildcards['model']:
         batch_size = 2
 
     dl = MaskedFastaDataset(

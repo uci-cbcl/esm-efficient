@@ -5,7 +5,7 @@ import sklearn.impute
 import sklearn.utils
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from esme.alphabet import tokenize, pad_tokens, mask_tokens, tokenize_unpad
+from esme.alphabet import tokenize, pad_tokens, mask_tokens, tokenize_unpad, Alphabet3
 
 
 def read_fai(fai_path):
@@ -82,9 +82,10 @@ class TokenSizeBatchSampler:
 
 class BaseFastaDataset(Dataset):
 
-    def __init__(self, fasta, fai=None, k_sample=None, max_len=None):
+    def __init__(self, fasta, fai=None, k_sample=None, max_len=None, alphabet=Alphabet3):
         self.max_len = max_len or float('inf')
         self.fasta = fasta
+        self.alphabet = alphabet
 
         if fai is None:
             fai = fasta + ".fai"
@@ -143,14 +144,15 @@ class FastaDataset(BaseFastaDataset):
             If None, all sequences are used.
     '''
 
-    def __init__(self, fasta, fai=None, k_sample=None, max_len=None):
-        super().__init__(fasta, fai=fai, k_sample=k_sample, max_len=max_len)
+    def __init__(self, fasta, fai=None, k_sample=None, max_len=None, alphabet=Alphabet3):
+        super().__init__(fasta, fai=fai, k_sample=k_sample,
+                         max_len=max_len, alphabet=alphabet)
 
     def __len__(self):
         return len(self.fai)
 
     def __getitem__(self, idx):
-        return tokenize(self.read_seq(idx))
+        return tokenize(self.read_seq(idx), alphabet=self.alphabet)
 
     @staticmethod
     def collate_fn(batch):
@@ -183,9 +185,10 @@ class FastaTokenDataset(BaseFastaDataset):
     '''
 
     def __init__(self, fasta, fai=None, token_per_batch=50_000, k_sample=None,
-                 max_len=None, drop_last=False, shuffle=True, random_state=None):
+                 max_len=None, drop_last=False, shuffle=True, random_state=None, alphabet=Alphabet3):
         super().__init__(fasta, fai=fai, k_sample=k_sample, max_len=max_len)
         self.token_per_batch = token_per_batch
+        self.alphabet = alphabet
 
         self.sampler = list(iter(TokenSizeBatchSampler(
             self.fai['length'].to_list(), token_per_batch, drop_last=drop_last,
@@ -198,7 +201,7 @@ class FastaTokenDataset(BaseFastaDataset):
     def __getitem__(self, idx):
         indices = self.sampler[idx]
         token, _, cu_lens, max_len = tokenize_unpad(
-            [self.read_seq(i) for i in indices])
+            [self.read_seq(i) for i in indices], alphabet=self.alphabet)
         return token, (cu_lens, max_len)
 
     def to_dataloader(self, num_workers=0, **kwargs):
@@ -226,14 +229,17 @@ class MaskedFastaDataset(FastaDataset):
         alter_freq (float): Frequency of altered
     '''
 
-    def __init__(self, fasta, fai=None, max_len=None, k_sample=None, mask_freq=.15, alter_freq=.1):
-        super().__init__(fasta, fai=fai, k_sample=k_sample, max_len=max_len)
+    def __init__(self, fasta, fai=None, max_len=None, k_sample=None, mask_freq=.15,
+                 alter_freq=.1, alphabet=Alphabet3):
+        super().__init__(fasta, fai=fai, k_sample=k_sample,
+                         max_len=max_len, alphabet=Alphabet3)
         self.mask_freq = mask_freq
         self.alter_freq = alter_freq
 
     def __getitem__(self, idx):
         token = super().__getitem__(idx)
-        mtokens, mask = mask_tokens(token, self.mask_freq, self.alter_freq)
+        mtokens, mask = mask_tokens(token, self.mask_freq, self.alter_freq,
+                                    alphabet=self.alphabet)
         return token, mtokens, mask
 
     @staticmethod
@@ -275,16 +281,17 @@ class MaskedFastaTokenDataset(FastaTokenDataset):
 
     def __init__(self, fasta, fai=None, token_per_batch=50_000, k_sample=None,
                  max_len=None, mask_freq=.15, alter_freq=.1, drop_last=False,
-                 shuffle=True, random_state=None):
+                 shuffle=True, random_state=None, alphabet=Alphabet3):
         super().__init__(fasta, fai=fai, token_per_batch=token_per_batch,
                          k_sample=k_sample, max_len=max_len, drop_last=drop_last,
-                         shuffle=shuffle, random_state=random_state)
+                         shuffle=shuffle, random_state=random_state, alphabet=alphabet)
         self.mask_freq = mask_freq
         self.alter_freq = alter_freq
 
     def __getitem__(self, idx):
         tokens, unpad_args = super().__getitem__(idx)
-        mtokens, mask = mask_tokens(tokens, self.mask_freq, self.alter_freq)
+        mtokens, mask = mask_tokens(
+            tokens, self.mask_freq, self.alter_freq, alphabet=self.alphabet)
         return tokens, unpad_args, mtokens, mask
 
 
@@ -309,7 +316,7 @@ class MaskedFastaDataModule(L.LightningDataModule):
     def __init__(
         self, train_fasta, val_fasta, test_fasta=None,
         train_fai=None, val_fai=None, test_fai=None,
-        batch_size=16, num_workers=0, mask_freq=.15, alter_freq=.1, max_len=None
+        batch_size=16, num_workers=0, mask_freq=.15, alter_freq=.1, max_len=None, alphabet=Alphabet3
     ):
         super().__init__()
         self.batch_size = batch_size
@@ -325,11 +332,12 @@ class MaskedFastaDataModule(L.LightningDataModule):
         self.mask_freq = mask_freq
         self.alter_freq = alter_freq
         self.max_len = max_len
+        self.alphabet = alphabet
 
     def _dataloder(self, fasta, fai=None, shuffle=False):
         return MaskedFastaDataset(
             fasta, fai=fai, max_len=self.max_len, mask_freq=self.mask_freq,
-            alter_freq=self.alter_freq
+            alter_freq=self.alter_freq, alphabet=self.alphabet
         ).to_dataloader(shuffle=shuffle, batch_size=self.batch_size,
                         num_workers=self.num_workers)
 
@@ -367,7 +375,7 @@ class MaskedFastaTokenDataModule(L.LightningDataModule):
         self, train_fasta, val_fasta, test_fasta=None,
         train_fai=None, val_fai=None, test_fai=None,
         token_per_batch=100_000, num_workers=0,
-        mask_freq=.15, alter_freq=.1, max_len=None
+        mask_freq=.15, alter_freq=.1, max_len=None, alphabet=Alphabet3
     ):
         super().__init__()
         self.token_per_batch = token_per_batch
@@ -384,13 +392,14 @@ class MaskedFastaTokenDataModule(L.LightningDataModule):
         self.alter_freq = alter_freq
         self.max_len = max_len
 
+        self.alphabet = alphabet
         self.current_epoch = 0
 
     def _dataloder(self, fasta, fai=None, shuffle=False):
         return MaskedFastaTokenDataset(
             fasta, fai=fai, token_per_batch=self.token_per_batch, max_len=self.max_len,
             mask_freq=self.mask_freq, alter_freq=self.alter_freq,
-            shuffle=shuffle, random_state=self.current_epoch
+            shuffle=shuffle, random_state=self.current_epoch, alphabet=self.alphabet
         ).to_dataloader(num_workers=self.num_workers)
 
     def train_dataloader(self):

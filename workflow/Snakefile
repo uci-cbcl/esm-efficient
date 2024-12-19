@@ -4,21 +4,6 @@ import pandas as pd
 configfile: "workflow/config/config.yaml"
 
 
-def memory(wildcards):
-    if wildcards["model"].startswith("8M"):
-        return 16
-    elif wildcards["model"].startswith("35M"):
-        return 16
-    elif wildcards["model"].startswith("150M"):
-        return 32
-    elif wildcards["model"].startswith("650M"):
-        return 32
-    elif wildcards["model"].startswith("3B"):
-        return 64
-    elif wildcards["model"].startswith("150B"):
-        return 96
-
-
 def model(wildcards):
     model = wildcards["model"].replace("e", "")
 
@@ -27,8 +12,12 @@ def model(wildcards):
     elif wildcards["model"].startswith("1ve"):
         ens = model.replace("1v", "")
         return config["safetensor"]["esm1v"].format(ens=ens)
+    elif wildcards["model"].startswith("c") and wildcards["model"].endswith("e"):
+        return config["safetensor"]["esmc"].format(model=model)
     elif wildcards["model"].endswith("e"):
         return config["safetensor"]["esm2"].format(model=model)
+    elif wildcards["model"].startswith("c"):
+        return config["esm"][model]
     elif wildcards["model"].startswith("1v"):
         ens = model.replace("1v", "")
         return config["esm"]["1v"].format(ens=ens)
@@ -36,16 +25,16 @@ def model(wildcards):
         return config["esm"][model]
 
 
-gpu_device = 1
+gpu_device = 0
 model_wildcards = "model={model}_q={quantize}_co={cpuoffloading}"
 finetune_wildcards = "model={model}_q={quantize}_c={checkpointing}_lora={lora}"
 
 baseline_models = list(config["esm"].keys())
 models = [f"{i}e" for i in baseline_models]
 models_esm2 = [
-    i for i in baseline_models if not (i.startswith("1b") or i.startswith("1v"))
+    i for i in baseline_models 
+    if not (i.startswith("1b") or i.startswith("1v"))
 ]
-
 
 include: "download/Snakefile"
 include: "common/Snakefile"
@@ -56,8 +45,10 @@ include: "train/Snakefile"
 include: "meltome/Snakefile"
 include: "tf/Snakefile"
 include: "figures/Snakefile"
+# include: "upload/Snakefile"
 
 
 rule all:
     input:
         rules.all_figures.input,
+        # rules.all_upload.input,

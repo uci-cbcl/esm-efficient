@@ -3,8 +3,6 @@ rule finetune_meltome_train:
         model=model,
         dataset=config["meltome"]["dataset"],
     threads: 16
-    resources:
-        mem_gb=memory,
     params:
         epochs=100,
         checkpoint_dir=config["meltome"]["checkpoint_dir"].replace(
@@ -32,8 +30,6 @@ rule finetune_meltome_test:
         ),
         dataset=config["meltome"]["dataset"],
     threads: 16
-    resources:
-        mem_gb=memory,
     params:
         device=4,
     output:

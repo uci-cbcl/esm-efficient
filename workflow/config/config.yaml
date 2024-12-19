@@ -9,19 +9,22 @@ uniref50_long:
   checkpoint_dir_1v: data/results/uniprot_long/checkpoints_1v_{ens}/
 
 esm:
+  1b: data/resources/esm/esm1b_t33_650M_UR50S.pt
+  1v: data/resources/esm/esm1v_t33_650M_UR90S_{ens}.pt
   8M: data/resources/esm/esm2_t6_8M_UR50D.pt
   35M: data/resources/esm/esm2_t12_35M_UR50D.pt
   150M: data/resources/esm/esm2_t30_150M_UR50D.pt
   650M: data/resources/esm/esm2_t33_650M_UR50D.pt
   3B: data/resources/esm/esm2_t36_3B_UR50D.pt
   15B: data/resources/esm/esm2_t48_15B_UR50D.pt
-  1b: data/resources/esm/esm1b_t33_650M_UR50S.pt
-  1v: data/resources/esm/esm1v_t33_650M_UR90S_{ens}.pt
+  c300m: data/resources/esm/esmc_300m_2024_12_v0.pth 
+  c600m: data/resources/esm/esmc_600m_2024_12_v0.pth
 
 safetensor:
-  esm2: data/results/safetensor/{model}.safetensors
   esm1b: data/results/models/1b/1b.safetensors
   esm1v: data/results/models/1v/1v_{ens}.safetensors
+  esmc: data/results/safetensor/c/{model}.safetensors
+  esm2: data/results/safetensor/{model}.safetensors
 
 benchmark:
   tokens: data/results/uniprotkb_subset_benchmark_tokens.pt

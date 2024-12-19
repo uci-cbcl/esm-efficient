@@ -43,6 +43,10 @@ setup(
     zip_safe=True,
 
     install_requires=requirements,
+    entry_points='''
+        [console_scripts]
+        esme_download=esme.cli:cli_download
+    ''',
 
     test_suite='tests',
     tests_require=test_requirements,

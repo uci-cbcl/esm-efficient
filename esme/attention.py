@@ -2,7 +2,7 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 from einops import rearrange
-from flash_attn import flash_attn_varlen_qkvpacked_func
+from flash_attn import flash_attn_varlen_func
 from esme.rotary import RotaryEmbedding
 
 
@@ -57,8 +57,10 @@ class FlashMultiheadAttention(nn.Module):
         embed_dim: int,
         num_heads: int,
         dropout=0.0,
-        dtype=torch.bfloat16,
+        pre_layernorm=True,
         rotary_embedding=True,
+        bias=False,
+        dtype=torch.bfloat16,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -68,46 +70,45 @@ class FlashMultiheadAttention(nn.Module):
         assert (
             self.head_dim * num_heads == self.embed_dim
         ), "embed_dim must be divisible by num_heads"
-        self.scaling = self.head_dim**-0.5
 
-        self.k = nn.Linear(embed_dim, embed_dim, bias=True, dtype=dtype)
-        self.v = nn.Linear(embed_dim, embed_dim, bias=True, dtype=dtype)
-        self.q = nn.Linear(embed_dim, embed_dim, bias=True, dtype=dtype)
-        self.out = nn.Linear(embed_dim, embed_dim, bias=True, dtype=dtype)
+        self.norm = nn.LayerNorm(embed_dim, dtype=dtype)
+        self.q = nn.Linear(embed_dim, embed_dim, bias=bias, dtype=dtype)
+        self.k = nn.Linear(embed_dim, embed_dim, bias=bias, dtype=dtype)
+        self.v = nn.Linear(embed_dim, embed_dim, bias=bias, dtype=dtype)
+        self.out = nn.Linear(embed_dim, embed_dim, bias=bias, dtype=dtype)
 
         if rotary_embedding:
             self.rot_emb = RotaryEmbedding(dim=self.head_dim)
         else:
             self.rot_emb = None
 
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.k.weight, gain=1 / 2**.5)
-        nn.init.xavier_uniform_(self.v.weight, gain=1 / 2**.5)
-        nn.init.xavier_uniform_(self.q.weight, gain=1 / 2**.5)
-        nn.init.xavier_uniform_(self.out.weight)
+        self.pre_layernorm = pre_layernorm
+        if self.pre_layernorm:
+            self.layernorm_q = nn.LayerNorm(embed_dim, bias=bias, dtype=dtype)
+            self.layernorm_k = nn.LayerNorm(embed_dim, bias=bias, dtype=dtype)
 
     def _qkv(self, x):
-        q = self.q(x) * self.scaling
-        k = self.k(x)
-        v = self.v(x)
+        x = self.norm(x)
+        q, k, v = self.q(x), self.k(x), self.v(x)
 
-        qkv = torch.stack(tensors=(q, k, v), dim=1)
-        # qkv = qkv.contiguous().view(-1, 3, self.num_heads, self.head_dim)
-        qkv = rearrange(qkv, 't l (h d) -> t l h d', h=self.num_heads)
+        if self.pre_layernorm:
+            q, k = self.layernorm_q(q), self.layernorm_k(k)
 
-        return qkv
+        return map(
+            lambda t: rearrange(t, 'b (h d) -> b h d', h=self.num_heads),
+            (q, k, v)
+        )
 
-    def _attn(self, qkv, cu_lens, max_len):
+    def _attn(self, q, k, v, cu_lens, max_len):
         '''
         '''
-        x = flash_attn_varlen_qkvpacked_func(
-            qkv,
-            cu_seqlens=cu_lens,
-            max_seqlen=max_len,
+        x = flash_attn_varlen_func(
+            q, k, v,
+            cu_seqlens_q=cu_lens,
+            cu_seqlens_k=cu_lens,
+            max_seqlen_q=max_len,
+            max_seqlen_k=max_len,
             dropout_p=self.dropout,
-            softmax_scale=1,
             causal=False,
         )
         return rearrange(x, 't h d -> t (h d)')
@@ -115,12 +116,12 @@ class FlashMultiheadAttention(nn.Module):
     def forward(self, x: Tensor, cu_lens, max_len) -> Tensor:
         '''
         '''
-        qkv = self._qkv(x)
+        q, k, v = self._qkv(x)
 
         if self.rot_emb:
-            qkv = self.rot_emb(qkv, cu_lens, max_len)
+            q, k = self.rot_emb(q, k, cu_lens, max_len)
 
-        x = self._attn(qkv, cu_lens, max_len)
+        x = self._attn(q, k, v, cu_lens, max_len)
         return self.out(x)
 
 
@@ -173,38 +174,55 @@ class FlashTransformerLayer(nn.Module):
     def __init__(
         self,
         embed_dim,
-        ffn_embed_dim,
+        expand_dim,
         attention_heads,
         rotary_embedding=True,
+        pre_layernorm=False,
+        bias=False,
+        residue_scaling=1.,
+        final_activation='swiglu',
+        dropout=0.0,
         dtype=torch.bfloat16,
     ):
         super().__init__()
         self.embed_dim = embed_dim
-        self.ffn_embed_dim = ffn_embed_dim
+        self.expand_dim = expand_dim
         self.attention_heads = attention_heads
+        self.residue_scaling = residue_scaling
 
         self.self_attn = FlashMultiheadAttention(
             self.embed_dim,
             self.attention_heads,
+            pre_layernorm=pre_layernorm,
+            bias=bias,
+            dropout=dropout,
             rotary_embedding=rotary_embedding,
             dtype=dtype
         )
-        self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, dtype=dtype)
 
-        self.fc1 = nn.Linear(self.embed_dim, self.ffn_embed_dim,
-                             bias=True, dtype=dtype)
-        self.fc2 = nn.Linear(self.ffn_embed_dim, self.embed_dim,
-                             bias=True, dtype=dtype)
-        self.final_layer_norm = nn.LayerNorm(self.embed_dim, dtype=dtype)
+        if final_activation == 'swiglu':
+            expanded_embed_dim = int(
+                ((expand_dim * self.embed_dim) + 255) // 256 * 256)
 
-    def _attn(self, x, cu_lens, max_len):
-        x = self.self_attn_layer_norm(x)
-        return self.self_attn(x, cu_lens, max_len)
-
-    def _head(self, x):
-        x = self.final_layer_norm(x)
-        x = self.fc2(F.gelu(self.fc1(x)))
-        return x
+            self.final = nn.Sequential(
+                nn.LayerNorm(self.embed_dim, dtype=dtype),
+                SwiGLU(self.embed_dim, expanded_embed_dim,
+                       bias=bias, dtype=dtype),
+                nn.Linear(expanded_embed_dim, self.embed_dim,
+                          bias=bias, dtype=dtype)
+            )
+        elif final_activation == 'gelu':
+            self.final = nn.Sequential(
+                nn.LayerNorm(self.embed_dim, dtype=dtype),
+                nn.Linear(self.embed_dim, embed_dim * self.expand_dim,
+                          bias=bias, dtype=dtype),
+                nn.GELU(),
+                nn.Linear(embed_dim * self.expand_dim, self.embed_dim,
+                          bias=bias, dtype=dtype)
+            )
+        else:
+            raise ValueError(
+                'Invalid final activation function. Must be "swiglu" or "gelu".')
 
     def forward(self, x, cu_lens, max_len):
         '''
@@ -218,5 +236,31 @@ class FlashTransformerLayer(nn.Module):
         Returns:
             torch.Tensor: The output tensor after applying the transformer layer 
         '''
-        x = x + self._attn(x, cu_lens, max_len)
-        return x + self._head(x)
+        x = x + self.self_attn(x, cu_lens, max_len) / self.residue_scaling
+        return x + self.final(x) / self.residue_scaling
+
+
+class SwiGLU(nn.Module):
+    def __init__(self, in_features, out_features, bias=False, dtype=torch.bfloat16):
+        """
+        SwiGLU activation.
+
+        Args:
+            input_dim (int): The input feature size.
+            hidden_dim (int): The intermediate hidden size
+        """
+        super(SwiGLU, self).__init__()
+
+        self.activation = nn.Linear(
+            in_features, out_features, bias=bias, dtype=dtype)
+        self.fc = nn.Linear(in_features, out_features, bias=bias, dtype=dtype)
+
+    def forward(self, x):
+        """
+        Forward pass for SwiGLU.
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, input_dim].
+        Returns:
+            torch.Tensor: Transformed tensor of shape [batch_size, hidden_dim].
+        """
+        return F.silu(self.activation(x)) * self.fc(x)

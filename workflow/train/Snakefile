@@ -9,8 +9,6 @@ rule train_memory:
         model=model,
         tokens=config["benchmark"]["tokens"],
     threads: 32
-    resources:
-        mem_gb=memory,
     params:
         device=0,
     output:
@@ -103,8 +101,6 @@ rule train_runtime_lightning:
         fasta=config["fasta"].format(uniprot="uniprotkb"),
         fai=config["fasta"].format(uniprot="uniprotkb") + ".fai",
     threads: 32
-    resources:
-        mem_gb=memory,
     wildcard_constraints:
         deepspeed="False",
     benchmark:
@@ -123,8 +119,6 @@ rule train_runtime_deepspeed:
         fasta=config["fasta"].format(uniprot="uniprotkb"),
         fai=config["fasta"].format(uniprot="uniprotkb") + ".fai",
     threads: 32
-    resources:
-        mem_gb=memory,
     params:
         token_per_batch=50_000,
     wildcard_constraints:

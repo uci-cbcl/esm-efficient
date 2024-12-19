@@ -34,8 +34,6 @@ rule finetune_train:
         val=config["tf"]["data"]["val"],
         test=config["tf"]["data"]["test"],
     threads: 16
-    resources:
-        mem_gb=memory,
     params:
         epochs=100,
         checkpoint_dir=config["finetune"]["checkpoint_dir"],
@@ -55,8 +53,6 @@ rule finetune_predict_testset:
         val=config["tf"]["data"]["val"],
         test=config["tf"]["data"]["test"],
     threads: 4
-    resources:
-        mem_gb=memory,
     params:
         device=0,
         batch_size=32,

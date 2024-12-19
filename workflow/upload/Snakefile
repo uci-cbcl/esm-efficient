@@ -1,0 +1,51 @@
+rule upload_esm1b:
+    input:
+        model=config['safetensor']['esm1b'],
+    output:
+        touch('logs/upload_esm1b_{model}.done'),
+    script:
+        "./upload.py"
+
+
+rule upload_esm1v:
+    input:
+        model=config['safetensor']['esm1v'],
+    output:
+        touch('logs/upload_esm1v_{ens}.done'),
+    script:
+        "./upload.py"
+
+
+rule upload_esm2:
+    input:
+        model=config['safetensor']['esm2'],
+    output:
+        touch('logs/upload_esm2_{model}.done'),
+    script:
+        "./upload.py"
+
+
+rule upload_esmc:
+    input:
+        model=config['safetensor']['esmc'],
+    output:
+        touch('logs/upload_esmc_{model}.done'),
+    script:
+        "./upload.py"
+
+
+rule all_upload:
+    input:
+        expand('logs/upload_esm1b_{model}.done', model='1b'),
+        expand(
+            'logs/upload_esm1v_{ens}.done',
+            ens=['1', '2', '3', '4', '5'],
+        ),
+        expand(
+            'logs/upload_esm2_{model}.done',
+            model=['8M', '35M', '150M', '650M', '3B', '15B'],
+        ),
+        expand(
+            'logs/upload_esmc_{model}.done',
+            model=['c300m', 'c600m'],
+        ),

@@ -170,3 +170,5 @@ wandb
 lightning_logs/
 vscode-*
 .nfs*
+esmc_300m_2024_12_v0.pth
+reports/

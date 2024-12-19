@@ -3,29 +3,43 @@ import torch
 from einops import rearrange
 from torchmetrics.text import Perplexity
 from safetensors.torch import safe_open
-from esme.alphabet import tokenize_unpad
-from esme.esm import ESM2
+from esme.alphabet import tokenize_unpad, Alphabet3
+from esme.esm import ESM2, ESM
 from conftest import device, esm2e_8M_path, p53_human
 
 
-def test_esm2(token, flash_esm2, esm2_model):
-    logit = esm2_model(token)['logits']
-    flash_logit = flash_esm2(token, pad_output=True).float()
+def test_esmc_p53(token_p53, flash_esmc, esmc_model):
+    flash_logit = flash_esmc(token_p53, pad_output=True).float()
+    logit = esmc_model(token_p53, token_p53 != 1).sequence_logits
 
     perplexity = Perplexity(ignore_index=1).to(device)
+    perp_flash = perplexity(flash_logit, token_p53)
 
-    for i, seq in enumerate(token):
-        _token = token[i:i+1, seq != 1]
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert (perp - perp_flash).abs() < .1
 
-        _flash_logit = flash_logit[i:i+1, seq != 1, :]
-        _logit = logit[i:i+1, seq != 1, :]
+    prob_flash = torch.softmax(flash_logit, dim=-1)
+    prob = torch.softmax(logit, dim=-1).float()
 
-        perp_flash = perplexity(_flash_logit, _token)
-        perp = perplexity(_logit, _token)
-        assert (perp - perp_flash).abs() < 1
+    sim = torch.nn.functional.cosine_similarity(
+        rearrange(flash_logit, 'b s e -> (b s) e'),
+        rearrange(logit, 'b s e -> (b s) e'),
+    )
+    assert all(sim > .99)
 
-        sim = torch.nn.functional.cosine_similarity(_logit[0], _flash_logit[0])
-        assert all(sim > .99)
+    tokens_unpad, _, cu_lens, max_len = tokenize_unpad(
+        [p53_human, p53_human * 2])
+    tokens_unpad = tokens_unpad.to(device)
+    cu_lens = cu_lens.to(device)
+
+    flash_logit_unpad = flash_esmc(tokens_unpad, (cu_lens, max_len)).float()
+
+    sim = torch.nn.functional.cosine_similarity(
+        flash_logit[0],
+        flash_logit_unpad[:cu_lens[1]]
+    )
+    assert all(sim > .99)
 
 
 def test_esm2_p53(token_p53, flash_esm2, esm2_model):
@@ -69,7 +83,7 @@ def test_esm2_p53(token_p53, flash_esm2, esm2_model):
 
 def test_ESM2_from_pretrained():
     model = ESM2.from_pretrained(esm2e_8M_path)
-    assert (model.lm_head.weight == model.embed_tokens.weight).all()
+    assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
     params = model.state_dict()
 
     with safe_open(esm2e_8M_path, framework="pt") as f:
@@ -81,13 +95,15 @@ def test_ESM2_from_pretrained():
         for k in f.keys():
             assert (params[k] == f.get_tensor(k)).all()
 
+
+def test_ESM2_from_pretrained_int8():
     model = ESM2.from_pretrained(esm2e_8M_path, quantization='8bit',
                                  device=device)
-    assert (model.lm_head.weight == model.embed_tokens.weight).all()
+    assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
     params = model.state_dict()
 
     for k, v in params.items():
-        for l in ['k', 'v', 'out', 'fc1', 'fc2']:
+        for l in ['q', 'k', 'v', 'out', 'fc1', 'fc2']:
             if k.endswith(f'.{l}.weight'):
                 assert v.dtype == torch.int8
 
@@ -96,9 +112,11 @@ def test_ESM2_from_pretrained():
             if 'bias' in k:
                 assert (params[k] == f.get_tensor(k)).all()
 
+
+def test_ESM2_from_pretrained_int4():
     model = ESM2.from_pretrained(esm2e_8M_path, quantization='4bit',
                                  device=device)
-    assert (model.lm_head.weight == model.embed_tokens.weight).all()
+    assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
     params = model.state_dict()
 
     for k, v in params.items():
@@ -110,3 +128,10 @@ def test_ESM2_from_pretrained():
         for k in f.keys():
             if 'bias' in k:
                 assert (params[k] == f.get_tensor(k).to(device)).all()
+
+
+def test_ESM_from_pretrained():
+    model = ESM.from_pretrained('esm2_8m')
+    assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
+    model = ESM.from_pretrained('esm2_8m', quantization='8bit', device=device)
+    model = ESM.from_pretrained('esm2_8m', checkpointing=True)

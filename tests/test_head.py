@@ -25,9 +25,9 @@ def test_RobertaLMHead(flash_esm2, esm2_model):
     )
 
     out_flash = torch.softmax(lm_head(embed), axis=-1)
-    out_esm = torch.softmax(esm_head(embed.to(torch.float32)), axis=-1)
+    out_esm = torch.softmax(esm_head(embed), axis=-1)
 
-    assert torch.allclose(lm_head.weight, esm_head.weight.to(torch.bfloat16))
-    assert torch.allclose(lm_head.bias, esm_head.bias.to(torch.bfloat16))
+    assert torch.allclose(lm_head.final.weight, esm_head.weight)
+    assert torch.allclose(lm_head.final.bias, esm_head.bias)
 
-    assert torch.allclose(out_flash, out_esm.to(torch.bfloat16), atol=1e-2)
+    assert torch.allclose(out_flash, out_esm, atol=1e-2)

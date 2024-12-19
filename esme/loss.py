@@ -1,8 +1,8 @@
 import torch.nn.functional as F
-from esme.alphabet import padding_idx
+from esme.alphabet import Alphabet3
 
 
-def nll_loss(log_probs, tokens, mask, nll_loss_kwargs=None):
+def nll_loss(log_probs, tokens, mask, nll_loss_kwargs=None, alphabet=Alphabet3):
     '''
     Negative log likelihood loss from masked tokens.
 
@@ -24,5 +24,5 @@ def nll_loss(log_probs, tokens, mask, nll_loss_kwargs=None):
     log_probs = log_probs[mask]
     targets = targets[mask]
 
-    return F.nll_loss(log_probs, targets, ignore_index=padding_idx,
+    return F.nll_loss(log_probs, targets, ignore_index=alphabet.padding_idx,
                       **(nll_loss_kwargs or {}))
