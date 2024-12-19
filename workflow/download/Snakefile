@@ -187,6 +187,23 @@ rule download_flip_meltome:
     shell:
         "wget {params.url} -O {params.dir}.zip && unzip {params.dir}.zip -d {params.dir}"
 
+rule download_c300m:
+    params:
+        url='https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12/resolve/main/data/weights/esmc_300m_2024_12_v0.pth?download=true'
+    output:
+        model=config["esm"]["c300m"],
+    shell:
+        "wget -O {output.model} {params.url}"
+
+
+rule download_c600m:
+    params:
+        url='https://huggingface.co/EvolutionaryScale/esmc-600m-2024-12/resolve/main/data/weights/esmc_600m_2024_12_v0.pth?download=true'
+    output:
+        model=config["esm"]["c600m"],
+    shell:
+        "wget -O {output.model} {params.url}"
+
 
 rule all_download:
     input:
@@ -195,8 +212,11 @@ rule all_download:
         rules.download_esm2_150M.output,
         rules.download_esm2_650M.output,
         rules.download_esm2_3B.output,
+        rules.download_esm2_15B.output,
         rules.download_esm1b.output,
         expand(rules.download_esm1v.output, ens=[1, 2, 3, 4, 5]),
+        rules.download_c300m.output,
+        rules.download_c600m.output,
         rules.download_uniprotkb.output,
         rules.download_uniprot50.output,
         rules.download_uniprot90.output,

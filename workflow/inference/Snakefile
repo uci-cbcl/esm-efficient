@@ -17,8 +17,6 @@ rule inference_runtime:
         tokens=config["benchmark"]["tokens"],
         model=model,
     threads: 16
-    resources:
-        mem_gb=memory,
     params:
         device=0,
     output:
@@ -32,8 +30,6 @@ rule inference_memory:
         tokens=config["benchmark"]["tokens"],
         model=model,
     threads: 16
-    resources:
-        mem_gb=memory,
     output:
         mem=f"reports/tables/inference_memory_{model_wildcards}.csv",
     script:
@@ -144,8 +140,10 @@ rule inference_on_human:
 
 rule inference_on_human_plot:
     input:
-        runtime_efficient="reports/tables/inference_time_on_human_model=650Me.txt",
-        runtime_baseline="reports/tables/inference_time_on_human_model=650M.txt",
+        runtime_baseline_esm2="reports/tables/inference_time_on_human_model=650M.txt",
+        runtime_efficient_esm2="reports/tables/inference_time_on_human_model=650Me.txt",
+        runtime_baseline_esmc="reports/tables/inference_time_on_human_model=c600m.txt",
+        runtime_efficient_esmc="reports/tables/inference_time_on_human_model=c600me.txt"
     threads: 1
     output:
         fig="reports/figures/inference_time_on_human.svg",

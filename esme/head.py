@@ -16,27 +16,15 @@ class RobertaLMHead(nn.Module):
         dtype: torch.dtype, the datatype to use for the weights
     """
 
-    def __init__(self, embed_dim, output_dim, weight, dtype=torch.bfloat16):
+    def __init__(self, embed_dim, vocab_size, dtype=torch.bfloat16):
         super().__init__()
         self.dense = nn.Linear(embed_dim, embed_dim, dtype=dtype)
         self.layer_norm = nn.LayerNorm(embed_dim, dtype=dtype)
-        self.weight = weight.to(dtype)
-        self.bias = nn.Parameter(torch.zeros(output_dim, dtype=dtype))
+        self.final = nn.Linear(embed_dim, vocab_size, dtype=dtype)
 
     def forward(self, features):
-        # project back to size of vocabulary with bias
-        x = features.to(self.dense.weight.dtype)
-        x = self.layer_norm(F.gelu(self.dense(x)))
-        return F.linear(x, self.weight, self.bias)
-
-    @classmethod
-    def from_embedding(cls, embedding_layer, dtype=torch.bfloat16):
-        return cls(
-            embed_dim=embedding_layer.embedding_dim,
-            output_dim=embedding_layer.num_embeddings,
-            weight=embedding_layer.weight,
-            dtype=dtype
-        )
+        x = self.layer_norm(F.gelu(self.dense(features)))
+        return self.final(x)
 
 
 class ClsHead(nn.Module):

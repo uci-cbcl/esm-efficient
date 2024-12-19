@@ -86,11 +86,11 @@ class MatMul8bit(torch.autograd.Function):
 
 class Linear8bit(torch.nn.Module):
 
-    def __init__(self, weights, bias, device, threshold=6):
+    def __init__(self, weights, bias=None, device='cuda', threshold=6):
         super().__init__()
         self.out_features, self.in_features, = weights.shape
 
-        self.bias = nn.Parameter(bias.to(device))
+        self.bias = nn.Parameter(bias.to(device)) if bias is not None else None
         cweight, scale = quantize(weights.to(device))
 
         self.register_buffer('cweight', cweight.contiguous())
@@ -99,9 +99,12 @@ class Linear8bit(torch.nn.Module):
 
     def forward(self, x: torch.Tensor):
         assert len(x.shape) == 2
-        return MatMul8bit.apply(
+        y = MatMul8bit.apply(
             x, self.cweight, self.scale, self.threshold
-        ) + self.bias
+        )
+        if self.bias is not None:
+            y += self.bias
+        return y
 
     def __repr__(self):
         return f"Linear8bit(in_features={self.in_features}, out_features={self.out_features}, threshold={self.threshold})"

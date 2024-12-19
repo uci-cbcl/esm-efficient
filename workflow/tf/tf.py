@@ -7,7 +7,10 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, default_collate
 import torchmetrics
 from esme import ESM2
-from esme.alphabet import tokenize, pad_tokens, padding_idx
+from esme.alphabet import tokenize, pad_tokens, Alphabet
+
+
+padding_idx = Alphabet.padding_idx
 
 
 class TfDataset(Dataset):
@@ -100,7 +103,6 @@ class TfModel(nn.Module):
         self.plm = ESM2.from_pretrained(
             model_path, checkpointing=checkpointing,
             quantization=quantization, device=device)
-        self.plm.untie_weights()
 
         if lora_kwargs is not None:
             self.plm.add_lora(**lora_kwargs)
@@ -115,18 +117,3 @@ class TfModel(nn.Module):
         emb = self.plm.forward_representation(token)
         emb = emb.masked_fill((token == padding_idx).unsqueeze(-1), 0)
         return self.head(emb.mean(dim=1))
-
-    # def _loss(self, batch):
-    #     return F.binary_cross_entropy_with_logits(
-    #         self(batch['token']), batch['label'])
-
-    # def training_step(self, batch, batch_idx):
-    #     loss = self._loss(batch)
-    #     self.train_loss.update(loss.item())
-    #     self.log('train_loss', self.train_loss, on_epoch=True)
-    #     return loss
-
-    # def validation_step(self, batch, batch_idx):
-    #     loss = self._loss(batch)
-    #     self.val_loss.update(loss.item())
-    #     self.log('val_loss', self.val_loss, on_epoch=True)

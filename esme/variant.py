@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from torchmetrics.text import Perplexity
 from esme import ESM2
-from esme.alphabet import tokenize, mask_idx, token_to_idx, amino_acids
+from esme.alphabet import tokenize, Alphabet3, Alphabet
 
 
 class MaskMarginDataset(Dataset):
@@ -36,11 +36,12 @@ class MaskMarginDataset(Dataset):
     ...  'wt_token': 1}
     '''
 
-    def __init__(self, seq, max_len=None):
+    def __init__(self, seq, max_len=None, alphabet=Alphabet3):
         super().__init__()
         self.seq = seq
         self.max_len = max_len
         self.token = tokenize([seq])[0]
+        self.alphabet = alphabet
 
     def __len__(self):
         return len(self.seq)
@@ -49,7 +50,7 @@ class MaskMarginDataset(Dataset):
         token = self.token.clone()
         wt = self.seq[idx]
         idx += 1
-        token[idx] = mask_idx
+        token[idx] = self.alphabet.mask_idx
 
         if self.max_len is not None and token.size(0) > self.max_len:
             start = max(0, idx - self.max_len // 2)
@@ -65,21 +66,22 @@ class MaskMarginDataset(Dataset):
             'local_pos': pos,
             'pos': idx,
             'wt': wt,
-            'wt_token': token_to_idx[wt],
+            'wt_token': self.alphabet.token_to_idx[wt],
         }
 
 
 class PseudoPerplexitiesMarginDataset(Dataset):
 
-    def __init__(self, seq):
+    def __init__(self, seq, alphabet=Alphabet3):
         super().__init__()
         self.seq = seq
+        self.alphabet = alphabet
         self.token = tokenize([seq])[0]
 
         self.variants = list()
 
         for pos, wt in enumerate(seq):
-            for mt in amino_acids:
+            for mt in self.alphabet.amino_acids:
                 for mask_pos, mask_aa in enumerate(seq):
                     self.variants.append(
                         (wt, pos + 1, mt, mask_pos + 1, mask_aa)
@@ -92,20 +94,21 @@ class PseudoPerplexitiesMarginDataset(Dataset):
         wt, pos, mt, mask_pos, mask_aa = self.variants[idx]
 
         token = self.token.clone()
-        token[pos] = token_to_idx[mt]
-        token[mask_pos] = mask_idx
+        token[pos] = self.alphabet.token_to_idx[mt]
+        token[mask_pos] = self.alpabet.mask_idx
 
         return {
             'token': token,
             'wt': wt,
             'pos': pos,
             'mt': mt,
-            'wt_mask_idx': token_to_idx[mask_aa],
+            'wt_mask_idx': self.alphabet.token_to_idx[mask_aa],
             'mask_pos': mask_pos,
         }
 
 
-def predict_mask_margin(model: ESM2, seq: str, batch_size: int = 32, max_len=None):
+def predict_mask_margin(model: ESM2, seq: str, batch_size: int = 32,
+                        max_len=None, alphabet=Alphabet3):
     """Predicts the mask margin for a given sequence.
 
     Args:
@@ -128,7 +131,7 @@ def predict_mask_margin(model: ESM2, seq: str, batch_size: int = 32, max_len=Non
     device = next(model.parameters()).device
 
     if isinstance(seq, str):
-        dl = DataLoader(MaskMarginDataset(seq, max_len=max_len),
+        dl = DataLoader(MaskMarginDataset(seq, max_len=max_len, alphabet=alphabet),
                         batch_size=batch_size, shuffle=False)
     elif isinstance(seq, DataLoader):
         dl = seq
@@ -154,15 +157,16 @@ def predict_mask_margin(model: ESM2, seq: str, batch_size: int = 32, max_len=Non
 
             pos = batch['pos']
             for p, wt, rl in zip(pos, batch['wt'], mask_margin):
-                for aa in amino_acids:
+                for aa in alphabet.amino_acids:
                     df.append({
                         'variant': f'{wt}{p}{aa}',
-                        'score': rl[token_to_idx[aa]].item()
+                        'score': rl[alphabet.token_to_idx[aa]].item()
                     })
     return pd.DataFrame(df).set_index('variant')
 
 
-def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32, max_len=None):
+def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32,
+                             max_len=None, alphabet=Alphabet3):
     '''
     Predict the pseudo-perplexity of sequence.
 
@@ -182,7 +186,7 @@ def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32, max_len=None)
     device = next(model.parameters()).device
 
     if isinstance(seq, str):
-        dl = DataLoader(MaskMarginDataset(seq, max_len=max_len),
+        dl = DataLoader(MaskMarginDataset(seq, max_len=max_len, alphabet=alphabet),
                         batch_size=batch_size, shuffle=False)
     elif isinstance(seq, DataLoader):
         dl = seq
@@ -197,9 +201,9 @@ def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32, max_len=None)
     with torch.no_grad():
         for batch in tqdm(dl):
             if isinstance(model, ESM2):
-                # TODO: fix this
                 probs = model(batch['token'].to(device), pad_output=True)
             else:
+                # TODO: remove old esm
                 probs = model(batch['token'].to(device))['logits']
 
             batch_idx = torch.arange(probs.size(0))
@@ -212,11 +216,11 @@ def predict_pseudoperplexity(model: ESM2, seq: str, batch_size=32, max_len=None)
     return perplexity.compute().item()
 
 
-def predict_pseudoperplexity_margin(model: ESM2, seq: str, batch_size):
+def predict_pseudoperplexity_margin(model: ESM2, seq: str, batch_size, alphabet=Alphabet3):
 
     device = next(model.parameters()).device
 
-    dl = DataLoader(PseudoPerplexitiesMarginDataset(seq),
+    dl = DataLoader(PseudoPerplexitiesMarginDataset(seq, alphabet=alphabet),
                     batch_size=batch_size, shuffle=False)
 
     df = list()

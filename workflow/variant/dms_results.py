@@ -25,6 +25,10 @@ if efficient:
         from esme import ESM1v
         model = ESM1v.from_pretrained(snakemake.input['model'],
                                       quantization=quantization, device=device)
+    elif snakemake.wildcards['model'].startswith('c'):
+        from esme import ESMC
+        model = ESMC.from_pretrained(snakemake.input['model'],
+                                     quantization=quantization, device=device).to(torch.bfloat16)
     else:
         from esme import ESM2
         model = ESM2.from_pretrained(snakemake.input['model'],
@@ -32,8 +36,9 @@ if efficient:
     max_len = None
 else:
     assert quantization is None
-    import esm
-    model, _ = esm.pretrained.load_model_and_alphabet(snakemake.input['model'])
+    import fair_esm
+    model, _ = fair_esm.pretrained.load_model_and_alphabet(
+        snakemake.input['model'])
     model = model.to(device)
     model.predict_log_prob = lambda token: torch.log_softmax(
         model(token)['logits'], dim=-1)

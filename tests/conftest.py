@@ -2,9 +2,10 @@ import os
 import random
 import pooch
 import torch
-import esm
 import pytest
-from esme.esm import ESM2
+import fair_esm
+from esm.models.esmc import ESMC as _ESMC
+from esme.esm import ESM2, ESMC
 
 
 random.seed(31)
@@ -16,6 +17,9 @@ fai_path = 'tests/data/test.fa.fai'
 esm2_8M_url = "https://dl.fbaipublicfiles.com/fair-esm/models/esm2_t6_8M_UR50D.pt"
 esm2_8M_model_path = 'tests/data/esm2_t6_8M_UR50D.pt'
 esm2e_8M_path = 'tests/data/8M.safetensors'
+
+esmc_300M_url = "https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12/resolve/main/data/weights/esmc_300m_2024_12_v0.pth?download=true"
+esmc_300M_model_path = 'tests/data/esmc_300m_2024_12_v0.pth'
 
 if not os.path.exists(esm2_8M_model_path):
     pooch.retrieve(
@@ -33,6 +37,14 @@ if not os.path.exists(esm2_8M_model_path):
             '.pt', '-contact-regression.pt')
     )
 
+if not os.path.exists(esmc_300M_model_path):
+    pooch.retrieve(
+        url=esmc_300M_url,
+        known_hash='md5:000cdd4cb3b8e3e4391a884161fa7434',
+        path=os.path.dirname(esmc_300M_model_path),
+        fname=os.path.basename(esmc_300M_model_path)
+    )
+
 device = 0
 
 bz = 2
@@ -46,7 +58,7 @@ calm1_human = 'MADQLTEEQIAEFKEAFSLFDKDGDGTITTKELGTVMRSLGQNPTEAELQDMINEVDADGNGTID
 
 @pytest.fixture
 def alphabet():
-    return esm.data.Alphabet.from_architecture('ESM-1b')
+    return fair_esm.data.Alphabet.from_architecture('ESM-1b')
 
 
 @pytest.fixture
@@ -78,9 +90,17 @@ def token_p53(alphabet):
 
 @pytest.fixture
 def esm2_model():
-    model, alphabet = esm.pretrained.load_model_and_alphabet(
+    model, alphabet = fair_esm.pretrained.load_model_and_alphabet(
         esm2_8M_model_path)
-    return model.to(device)
+    return model.to(torch.bfloat16).to(device)
+
+
+@pytest.fixture
+def esmc_model():
+    model = _ESMC(d_model=960, n_heads=15, n_layers=30, tokenizer=None)
+    state_dict = torch.load(esmc_300M_model_path)
+    model.load_state_dict(state_dict)
+    return model.to(torch.bfloat16).to(device)
 
 
 @pytest.fixture
@@ -90,12 +110,100 @@ def flash_esm2(esm2_model):
         embed_dim=esm2_model.embed_dim,
         attention_heads=esm2_model.attention_heads,
     )
-    params = esm2_model.state_dict()
-    params = {
-        k.replace('_proj', ''): v
-        for k, v in params.items()
+    state_dict = {
+        k: v
+        for k, v in esm2_model.state_dict().items()
         if not k.startswith('contact_head')
     }
-    missing, unexpected = model.load_state_dict(params, strict=False)
-    model = model.to(device=device).to(torch.bfloat16)
-    return model
+    state_dict_new = {
+        'embed_tokens.weight': state_dict['embed_tokens.weight'],
+        'lm_head.layer_norm.bias': state_dict['lm_head.layer_norm.bias'],
+        'lm_head.layer_norm.weight': state_dict['lm_head.layer_norm.weight'],
+        'emb_layer_norm_after.weight': state_dict['emb_layer_norm_after.weight'],
+        'emb_layer_norm_after.bias': state_dict['emb_layer_norm_after.bias'],
+        'lm_head.dense.weight': state_dict['lm_head.dense.weight'],
+        'lm_head.dense.bias': state_dict['lm_head.dense.bias'],
+        'lm_head.final.weight': state_dict['lm_head.weight'],
+        'lm_head.final.bias': state_dict['lm_head.bias'],
+    }
+
+    for i in range(6):
+        state_dict_new[f'layers.{i}.self_attn.norm.weight'] = state_dict[
+            f'layers.{i}.self_attn_layer_norm.weight']
+        state_dict_new[f'layers.{i}.self_attn.norm.bias'] = state_dict[
+            f'layers.{i}.self_attn_layer_norm.bias']
+
+        for j in ['q', 'k', 'v', 'out']:
+            state_dict_new[f'layers.{i}.self_attn.{j}.weight'] = state_dict[
+                f'layers.{i}.self_attn.{j}_proj.weight']
+            state_dict_new[f'layers.{i}.self_attn.{j}.bias'] = state_dict[
+                f'layers.{i}.self_attn.{j}_proj.bias']
+
+        state_dict_new[f'layers.{i}.final.0.weight'] = state_dict[
+            f'layers.{i}.final_layer_norm.weight']
+        state_dict_new[f'layers.{i}.final.0.bias'] = state_dict[
+            f'layers.{i}.final_layer_norm.bias']
+        state_dict_new[f'layers.{i}.final.1.weight'] = state_dict[
+            f'layers.{i}.fc1.weight']
+        state_dict_new[f'layers.{i}.final.1.bias'] = state_dict[
+            f'layers.{i}.fc1.bias']
+        state_dict_new[f'layers.{i}.final.3.weight'] = state_dict[
+            f'layers.{i}.fc2.weight']
+        state_dict_new[f'layers.{i}.final.3.bias'] = state_dict[
+            f'layers.{i}.fc2.bias']
+
+    missing, unexpected = model.load_state_dict(state_dict_new, strict=False)
+    return model.to(device=device)
+
+
+@pytest.fixture
+def flash_esmc(esmc_model):
+    # from esm.tokenization import get_esmc_model_tokenizers
+
+    model = ESMC(num_layers=30, embed_dim=960, attention_heads=15).to(
+        device).to(torch.bfloat16)
+    state_dict = {
+        k: v
+        for k, v in esmc_model.state_dict().items()
+        if not k.startswith('contact_head')
+    }
+    state_dict_new = {
+        'embed_tokens.weight': state_dict['embed.weight'],
+        'emb_layer_norm_after.weight': state_dict['transformer.norm.weight'],
+        'lm_head.dense.weight': state_dict['sequence_head.0.weight'],
+        'lm_head.dense.bias': state_dict['sequence_head.0.bias'],
+        'lm_head.layer_norm.weight': state_dict['sequence_head.2.weight'],
+        'lm_head.layer_norm.bias': state_dict['sequence_head.2.bias'],
+        'lm_head.final.weight': state_dict['sequence_head.3.weight'],
+        'lm_head.final.bias': state_dict['sequence_head.3.bias'],
+    }
+
+    for i in range(30):
+        state_dict_new[f'layers.{i}.self_attn.norm.weight'] = state_dict[f'transformer.blocks.{i}.attn.layernorm_qkv.0.weight']
+        state_dict_new[f'layers.{i}.self_attn.norm.bias'] = state_dict[f'transformer.blocks.{i}.attn.layernorm_qkv.0.bias']
+        q, k, v = state_dict[f'transformer.blocks.{i}.attn.layernorm_qkv.1.weight'].chunk(
+            3, dim=0)
+        # state_dict_new[f'layers.{i}.self_attn.q.weight'] = qkv[:960, :]
+        # state_dict_new[f'layers.{i}.self_attn.k.weight'] = qkv[960:1920, :]
+        # state_dict_new[f'layers.{i}.self_attn.v.weight'] = qkv[1920:, :]
+        state_dict_new[f'layers.{i}.self_attn.q.weight'] = q
+        state_dict_new[f'layers.{i}.self_attn.k.weight'] = k
+        state_dict_new[f'layers.{i}.self_attn.v.weight'] = v
+
+        state_dict_new[f'layers.{i}.self_attn.out.weight'] = state_dict[f'transformer.blocks.{i}.attn.out_proj.weight']
+        state_dict_new[f'layers.{i}.self_attn.layernorm_q.weight'] = state_dict[f'transformer.blocks.{i}.attn.q_ln.weight']
+        state_dict_new[f'layers.{i}.self_attn.layernorm_k.weight'] = state_dict[f'transformer.blocks.{i}.attn.k_ln.weight']
+        state_dict_new[f'layers.{i}.final.0.weight'] = state_dict[f'transformer.blocks.{i}.ffn.0.weight']
+        state_dict_new[f'layers.{i}.final.0.bias'] = state_dict[f'transformer.blocks.{i}.ffn.0.bias']
+
+        _act, _weights = state_dict[f'transformer.blocks.{i}.ffn.1.weight'].chunk(
+            2, dim=0)
+        state_dict_new[f'layers.{i}.final.1.activation.weight'] = _act
+        state_dict_new[f'layers.{i}.final.1.fc.weight'] = _weights
+        # state_dict_new[f'layers.{i}.final.1.activation.weight'] = state_dict[f'transformer.blocks.{i}.ffn.1.weight'][:2560, :]
+        # state_dict_new[f'layers.{i}.final.1.fc.weight'] = state_dict[f'transformer.blocks.{i}.ffn.1.weight'][2560:, :]
+        state_dict_new[f'layers.{i}.final.2.weight'] = state_dict[f'transformer.blocks.{i}.ffn.3.weight']
+
+    missing, unexpected = model.load_state_dict(state_dict_new, strict=False)
+
+    return model.to(device).to(torch.bfloat16)

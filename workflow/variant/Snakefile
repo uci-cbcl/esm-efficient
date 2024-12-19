@@ -5,8 +5,9 @@ df_proteingym = df_proteingym[df_proteingym["DMS_id"].str.contains("HUMAN")]
 df_proteingym = df_proteingym[df_proteingym["uniprotkb"]]
 proteingym_ids = df_proteingym["Uniprot_ID"].unique().tolist()
 
+ruleorder: proteingym_predict_esmc > proteingym_predict  
 
-rule proteingym_predict:
+rule proteingym_predict_esmc:
     input:
         model=model,
         mapping=proteingym_mapping,
@@ -18,7 +19,27 @@ rule proteingym_predict:
         device=4,
         proteins=proteingym_ids,
     wildcard_constraints:
-        model="[^_]*",
+        model="c.+m",
+    output:
+        scatter_dir=directory(config["proteingym"]["scatter"]),
+        stats=config["proteingym"]["stats"],
+    script:
+        "./dms_results_esmc.py"
+
+
+rule proteingym_predict:
+    input:
+        model=model,
+        mapping=proteingym_mapping,
+        dms_substitutions_dir=config["proteingym"]["substitutions"],
+    threads: 16
+    resources:
+        mem_gb=16,
+    params:
+        device=0,
+        proteins=proteingym_ids,
+    wildcard_constraints:
+        model="(?!.*m$)[^_]+"
     output:
         scatter_dir=directory(config["proteingym"]["scatter"]),
         stats=config["proteingym"]["stats"],
@@ -42,6 +63,8 @@ rule proteingym_figure:
                 "1ve3",
                 "1ve2",
                 "1ve1",
+                "c300me",
+                "c600me",
                 "3Be",
                 "15Be",
             ],
@@ -62,6 +85,8 @@ rule proteingym_figure:
                 "1v3",
                 "1v2",
                 "1v1",
+                "c300m",
+                "c600m",
                 "3B",
                 "15B",
             ],

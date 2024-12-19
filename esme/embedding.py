@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from esme.alphabet import padding_idx
+from esme.alphabet import Alphabet
 
 
 class LearnedPositionalEmbedding(nn.Embedding):
@@ -30,7 +30,7 @@ class LearnedPositionalEmbedding(nn.Embedding):
                  dtype=torch.bfloat16):
         num_embeddings_ = num_embeddings + 2
         super().__init__(num_embeddings_, embedding_dim,
-                         padding_idx, dtype=dtype)
+                         Alphabet.padding_idx, dtype=dtype)
         self.max_positions = num_embeddings
 
     def positions(self, input: torch.Tensor):

@@ -1,7 +1,7 @@
 import torch
 from flash_attn.bert_padding import unpad_input
-from esme.alphabet import tokenize, mask_tokens, mask_idx, tokenize_unpad, \
-    split_alphabet, token_to_str, padding_idx, pad_tokens
+from esme.alphabet import tokenize, mask_tokens, tokenize_unpad, \
+    split_alphabet, token_to_str, Alphabet, pad_tokens
 from conftest import p53_human, calm1_human
 
 
@@ -46,7 +46,7 @@ def test_tokenize(alphabet):
 
     seq = p53_human[:10] + '<mask>' + p53_human[11:]
     tokens = tokenize(seq)
-    assert torch.all(tokens[0, 11] == mask_idx)
+    assert torch.all(tokens[0, 11] == Alphabet.mask_idx)
 
 
 def test_tokenize_unpad():
@@ -74,7 +74,7 @@ def test_tokenize_unpad():
     embed = embedding_layer(tokens_pad)
 
     embed_unpad, _indices, _cu_lens, _max_len, _ = unpad_input(
-        hidden_states=embed, attention_mask=~tokens_pad.eq(padding_idx))
+        hidden_states=embed, attention_mask=~tokens_pad.eq(Alphabet.padding_idx))
 
     assert torch.all(embed_unpad == embedding_layer(tokens))
     assert torch.all(cu_lens == _cu_lens)
@@ -85,7 +85,7 @@ def test_tokenize_unpad():
 def test_mask_tokens():
     tokens = tokenize(p53_human)
     mtokens, mask = mask_tokens(tokens)
-    assert (mtokens == mask_idx).sum() > 0
+    assert (mtokens == Alphabet.mask_idx).sum() > 0
 
     tokens = tokenize(p53_human)
     mtokens, mask = mask_tokens(tokens, alter=.5)
@@ -95,17 +95,17 @@ def test_mask_tokens():
     seqs = [p53_human, p53_human + p53_human]
     tokens = tokenize(seqs)
     mtokens, mask = mask_tokens(tokens)
-    assert (mtokens == mask_idx).sum() > 0
+    assert (mtokens == Alphabet.mask_idx).sum() > 0
 
     mtokens, mask = mask_tokens(tokens, .01)
-    assert ((mtokens == mask_idx).sum(axis=1) > 0).all()
+    assert ((mtokens == Alphabet.mask_idx).sum(axis=1) > 0).all()
 
     mtokens, mask = mask_tokens(tokens, .0, .0)
-    assert ((mtokens == mask_idx).sum(axis=1) == 1).all()
+    assert ((mtokens == Alphabet.mask_idx).sum(axis=1) == 1).all()
 
     tokens, _, cu_lens, max_len = tokenize_unpad(p53_human)
     mtokens, mask = mask_tokens(tokens, .0, .0)
-    assert ((mtokens == mask_idx).sum(axis=-1) == 1).all()
+    assert ((mtokens == Alphabet.mask_idx).sum(axis=-1) == 1).all()
 
 
 def test_split_alphabet():

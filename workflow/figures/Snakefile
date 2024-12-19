@@ -309,14 +309,14 @@ rule sup_figure_9:
 rule sup_table:
     input:
         tables=[
-            "reports/tables/inference_memory.csv",
-            "reports/tables/inference_runtime.csv",
-            "reports/tables/proteingym_maskmargin_spearman.csv",
-            "reports/tables/train_memory.csv",
-            "reports/tables/train_runtime_stats.csv",
-            "reports/tables/meltome_barplot_stats.tsv",
-            "reports/tables/tf_roc_performance.tsv",
-            "reports/tables/tf_precision_recall_performance.tsv",
+            "data/reports/tables/inference_memory.csv",
+            "data/reports/tables/inference_runtime.csv",
+            "data/reports/tables/proteingym_maskmargin_spearman.csv",
+            "data/reports/tables/train_memory.csv",
+            "data/reports/tables/train_runtime_stats.csv",
+            "data/reports/tables/meltome_barplot_stats.tsv",
+            "data/reports/tables/tf_roc_performance.tsv",
+            "data/reports/tables/tf_precision_recall_performance.tsv",
             "workflow/config/tf_go_terms.txt",
         ],
     output:

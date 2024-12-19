@@ -45,29 +45,25 @@ def apply_rotary(
 
 class ApplyRotaryEmbQKV_(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, qkv, cos, sin, cu_lens):
-        q, k, v = qkv[:, 0], qkv[:, 1], qkv[:, 2]
-
-        q_r = apply_rotary(q, cos, sin, cu_lens)
-        q_k = apply_rotary(k, cos, sin, cu_lens)
-
+    def forward(ctx, q, k, cos, sin, cu_lens):
         ctx.save_for_backward(cos, sin, cu_lens)
 
-        return torch.stack([q_r, q_k, v], dim=1)
+        q_r = apply_rotary(q, cos, sin, cu_lens)
+        k_r = apply_rotary(k, cos, sin, cu_lens)
+
+        return q_r, k_r
 
     @staticmethod
-    def backward(ctx, dqkv):
+    def backward(ctx, dq, dk):
         cos, sin, cu_lens = ctx.saved_tensors
-
-        dq, dk, dv = dqkv[:, 0], dqkv[:, 1], dqkv[:, 2]
 
         dq_r = apply_rotary(dq, cos, sin, cu_lens)
         dk_r = apply_rotary(dk, cos, sin, cu_lens)
 
-        return torch.stack([dq_r, dk_r, dv], dim=1), None, None, None, None
+        return dq_r, dk_r, None, None, None, None
 
 
-def apply_rotary_emb_qkv_(qkv, cos, sin, cu_lens: torch.Tensor) -> torch.Tensor:
+def apply_rotary_emb_qkv_(q, k, cos, sin, cu_lens: torch.Tensor) -> torch.Tensor:
     """
     Apply rotary embedding *inplace* to the first rotary_dim of Q and K.
 
@@ -79,7 +75,7 @@ def apply_rotary_emb_qkv_(qkv, cos, sin, cu_lens: torch.Tensor) -> torch.Tensor:
     Return:
         qkv: (batch_size * seqlen, 3, nheads, headdim)
     """
-    return ApplyRotaryEmbQKV_.apply(qkv, cos, sin, cu_lens)
+    return ApplyRotaryEmbQKV_.apply(q, k, cos, sin, cu_lens)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -152,7 +148,8 @@ class RotaryEmbedding(torch.nn.Module):
             self._cos_cached = emb.cos().to(dtype)
             self._sin_cached = emb.sin().to(dtype)
 
-    def forward(self, qkv: torch.Tensor, cu_lens: torch.Tensor, max_len: int) -> torch.Tensor:
+    def forward(self, q: torch.Tensor, k: torch.Tensor,
+                cu_lens: torch.Tensor, max_len: int) -> torch.Tensor:
         """
         Apply rotary embedding *inplace*.
 
@@ -163,8 +160,6 @@ class RotaryEmbedding(torch.nn.Module):
         Return:
             qkv: (batch_size * seqlen, 3, nheads, headdim)
         """
-        self._update_cos_sin_cache(
-            max_len, device=qkv.device, dtype=qkv.dtype)
+        self._update_cos_sin_cache(max_len, device=q.device, dtype=q.dtype)
 
-        return apply_rotary_emb_qkv_(
-            qkv, self._cos_cached, self._sin_cached, cu_lens)
+        return apply_rotary_emb_qkv_(q, k, self._cos_cached, self._sin_cached, cu_lens)
