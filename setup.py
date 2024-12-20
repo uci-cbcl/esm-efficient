@@ -17,7 +17,8 @@ requirements = [
     'polars',
     'torchmetrics',
     'lightning',
-    'scikit-learn'
+    'scikit-learn',
+    'huggingface_hub'
 ]
 
 test_requirements = [
@@ -30,7 +31,7 @@ test_requirements = [
 
 setup(
     name="esm-efficient",
-    version='0.0.4',
+    version='0.0.7',
     description="Efficient Evolutionary Scale Modeling: Efficient and simplified implementation of protein language model for inference and training.",
     keywords=['LLM', 'PLM', 'protein language model'],
     long_description=readme,

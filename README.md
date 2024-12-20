@@ -151,3 +151,7 @@ Manuscript for the efficient implementation: [https://www.biorxiv.org/content/10
 }
 ```
 Also, cite original ESM papers for the related model: [https://github.com/facebookresearch/esm](https://github.com/facebookresearch/esm)
+
+## LICENSE
+This code implements ESM models from scratch and is licensed under the MIT License. Refer to the [esm](https://github.com/evolutionaryscale/esm) and [fair-esm](https://github.com/facebookresearch/esm) repositories for the licenses for the model weights.
+
