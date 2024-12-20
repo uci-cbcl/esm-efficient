@@ -1,6 +1,9 @@
-# ESM-Efficient 
+# ESM-Efficient
 
-Efficient implementatin of ESM family of models. Including ESM1b, ESM1v, ESM2, ESMC.
+[![pypi](https://img.shields.io/pypi/v/esm-efficient.svg)](https://pypi.python.org/pypi/esm-efficient)
+[![DOI:10.1101/2024.10.22.619563](http://img.shields.io/badge/DOI-10.1101/2024.10.22.619563-B31B1B.svg)](https://doi.org/10.1101/2024.10.22.619563)
+
+Efficient implementation of the ESM family of models: ESM1b, ESM1v, ESM2, ESMC.
 
 <img src="docs/methods.png"  width="300" /> <img src="docs/speedup.png" width="400" />
 
@@ -14,7 +17,7 @@ pip install esm-efficient
 
 ## Basic Usage
 
-```
+```python
 from esme import ESM
 
 model = ESM.from_pretrained('esmc') # or 'esm1b', 'esm1v', 'esm2', 'esm2_8m', ...
