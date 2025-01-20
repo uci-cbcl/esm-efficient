@@ -12,9 +12,8 @@ from esme.download import download_model
     ' esm2_650m, esm2_3b, esm2_15b, esmc, esmc_300m, esmc_600m'
 )
 @click.option(
-    '--dir', '-d',
+    '--local_dir', '--dir', '-d',
     default=None,
-    optional=True,
     type=str,
     help='The directory to save the model to.'
 )

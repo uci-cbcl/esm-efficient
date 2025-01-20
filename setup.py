@@ -31,7 +31,7 @@ test_requirements = [
 
 setup(
     name="esm-efficient",
-    version='0.0.7',
+    version='0.0.8',
     description="Efficient Evolutionary Scale Modeling: Efficient and simplified implementation of protein language model for inference and training.",
     keywords=['LLM', 'PLM', 'protein language model'],
     long_description=readme,
