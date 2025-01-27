@@ -1,8 +1,7 @@
 import torch
 import torchmetrics
-import torch.nn.functional as F
 from lightning.pytorch import LightningModule
-from esme.loss import nll_loss
+from esme.loss import cross_entropy
 
 
 class MaskedPLM(LightningModule):
@@ -23,10 +22,10 @@ class MaskedPLM(LightningModule):
         self.val_loss = torchmetrics.MeanMetric()
 
     def forward(self, tokens, pad_args):
-        return self.model.predict_log_prob(tokens, pad_args)
+        return self.model(tokens, pad_args)
 
     def _loss(self, target, pad_args, token, mask):
-        return nll_loss(self(token, pad_args), target, mask)
+        return cross_entropy(self(token, pad_args), target, mask)
 
     def training_step(self, batch, batch_idx):
         target, pad_args, token, mask = batch

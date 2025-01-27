@@ -238,7 +238,7 @@ class ESM2(nn.Module):
 
         return x
 
-    def forward(self, tokens, pad_args=None, pad_output=False, 
+    def forward(self, tokens, pad_args=None, pad_output=False,
                 pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the logits
@@ -254,7 +254,7 @@ class ESM2(nn.Module):
         return self.lm_head(self.forward_representation(
             tokens, pad_args, pad_output, pad_indices, lora_names))
 
-    def predict_log_prob(self, tokens, pad_args=None, pad_output=False, 
+    def predict_log_prob(self, tokens, pad_args=None, pad_output=False,
                          pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the log probabilities
@@ -267,10 +267,10 @@ class ESM2(nn.Module):
             pad_output: bool - whether to pad the output to output.
             pad_indices: torch.Tensor - the indices of the padded tokens.
         '''
-        return torch.log_softmax(self(tokens, pad_args, pad_output, 
+        return torch.log_softmax(self(tokens, pad_args, pad_output,
                                       pad_indices, lora_names), dim=-1)
 
-    def predict_prob(self, tokens, log=False, pad_args=None, pad_output=False, 
+    def predict_prob(self, tokens, log=False, pad_args=None, pad_output=False,
                      pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the probabilities
