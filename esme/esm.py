@@ -201,7 +201,7 @@ class ESM2(nn.Module):
         return x
 
     def forward_representation(self, tokens, pad_args=None, pad_output=False,
-                               pad_indices=None):
+                               pad_indices=None, lora_names=None):
         '''
         Forward pass through the model without the head to get the representation
         per token in the sequence.
@@ -227,9 +227,9 @@ class ESM2(nn.Module):
 
         for layer in self.layers:
             if self.checkpointing:
-                x = self.checkpoint(layer, x, cu_lens, max_len)
+                x = self.checkpoint(layer, x, cu_lens, max_len, lora_names)
             else:
-                x = layer(x, cu_lens, max_len)
+                x = layer(x, cu_lens, max_len, lora_names)
 
         x = self.emb_layer_norm_after(x)
 
@@ -238,7 +238,8 @@ class ESM2(nn.Module):
 
         return x
 
-    def forward(self, tokens, pad_args=None, pad_output=False, pad_indices=None):
+    def forward(self, tokens, pad_args=None, pad_output=False, 
+                pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the logits
         of the tokens.
@@ -251,9 +252,10 @@ class ESM2(nn.Module):
             pad_indices: torch.Tensor - the indices of the padded tokens.
         '''
         return self.lm_head(self.forward_representation(
-            tokens, pad_args, pad_output, pad_indices))
+            tokens, pad_args, pad_output, pad_indices, lora_names))
 
-    def predict_log_prob(self, tokens, pad_args=None, pad_output=False, pad_indices=None):
+    def predict_log_prob(self, tokens, pad_args=None, pad_output=False, 
+                         pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the log probabilities
         of the tokens.
@@ -265,9 +267,11 @@ class ESM2(nn.Module):
             pad_output: bool - whether to pad the output to output.
             pad_indices: torch.Tensor - the indices of the padded tokens.
         '''
-        return torch.log_softmax(self(tokens, pad_args, pad_output, pad_indices), dim=-1)
+        return torch.log_softmax(self(tokens, pad_args, pad_output, 
+                                      pad_indices, lora_names), dim=-1)
 
-    def predict_prob(self, tokens, log=False, pad_args=None, pad_output=False, pad_indices=None):
+    def predict_prob(self, tokens, log=False, pad_args=None, pad_output=False, 
+                     pad_indices=None, lora_names=None):
         '''
         Forward pass through the model with the head to get the probabilities
         of the tokens.
@@ -280,9 +284,10 @@ class ESM2(nn.Module):
             pad_output: bool - whether to pad the output to output.
             pad_indices: torch.Tensor - the indices of the padded tokens.
         '''
+        args = (tokens, pad_args, pad_output, pad_indices, lora_names)
         if log:
-            return self.predict_log_prob(tokens, pad_args, pad_output, pad_indices)
-        return torch.softmax(self(tokens, pad_args, pad_output, pad_indices), dim=-1)
+            return self.predict_log_prob(*args)
+        return torch.softmax(self(*args), dim=-1)
 
     @classmethod
     def create_model(cls, path, checkpointing=False):
@@ -804,7 +809,7 @@ class ESMC(ESM2):
         self.lm_head = RobertaLMHead(self.embed_dim, 64, dtype=dtype)
 
     def forward_representation(self, tokens, pad_args=None, pad_output=False,
-                               pad_indices=None):
+                               pad_indices=None, lora_names=None):
         '''
         Forward pass through the model without the head to get the representation
         per token in the sequence.
@@ -830,9 +835,9 @@ class ESMC(ESM2):
 
         for layer in self.layers:
             if self.checkpointing:
-                x = self.checkpoint(layer, x, cu_lens, max_len)
+                x = self.checkpoint(layer, x, cu_lens, max_len, lora_names)
             else:
-                x = layer(x, cu_lens, max_len)
+                x = layer(x, cu_lens, max_len, lora_names)
 
         x = self.emb_layer_norm_after(x)
 

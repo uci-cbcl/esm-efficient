@@ -3,6 +3,7 @@ from torch import Tensor, nn
 import torch.nn.functional as F
 from einops import rearrange
 from flash_attn import flash_attn_varlen_func
+from esme.lora import LoRA
 from esme.rotary import RotaryEmbedding
 
 
@@ -87,9 +88,15 @@ class FlashMultiheadAttention(nn.Module):
             self.layernorm_q = nn.LayerNorm(embed_dim, bias=bias, dtype=dtype)
             self.layernorm_k = nn.LayerNorm(embed_dim, bias=bias, dtype=dtype)
 
-    def _qkv(self, x):
+    def _qkv(self, x, lora_names=None):
         x = self.norm(x)
-        q, k, v = self.q(x), self.k(x), self.v(x)
+
+        if lora_names is not None:
+            q = self.q(x, lora_names) if isinstance(self.q, LoRA) else self.q(x)
+            k = self.k(x, lora_names) if isinstance(self.k, LoRA) else self.k(x)
+            v = self.v(x, lora_names) if isinstance(self.v, LoRA) else self.v(x)
+        else:
+            q, k, v = self.q(x), self.k(x), self.v(x)
 
         if self.pre_layernorm:
             q, k = self.layernorm_q(q), self.layernorm_k(k)
@@ -113,16 +120,20 @@ class FlashMultiheadAttention(nn.Module):
         )
         return rearrange(x, 't h d -> t (h d)')
 
-    def forward(self, x: Tensor, cu_lens, max_len) -> Tensor:
+    def forward(self, x: Tensor, cu_lens, max_len, lora_names=None) -> Tensor:
         '''
         '''
-        q, k, v = self._qkv(x)
+        q, k, v = self._qkv(x, lora_names)
 
         if self.rot_emb:
             q, k = self.rot_emb(q, k, cu_lens, max_len)
 
         x = self._attn(q, k, v, cu_lens, max_len)
-        return self.out(x)
+
+        if (lora_names is not None) and isinstance(self.out, LoRA):
+            return self.out(x, lora_names)
+        else:
+            return self.out(x)
 
 
 class FlashTransformerLayer(nn.Module):
@@ -224,7 +235,7 @@ class FlashTransformerLayer(nn.Module):
             raise ValueError(
                 'Invalid final activation function. Must be "swiglu" or "gelu".')
 
-    def forward(self, x, cu_lens, max_len):
+    def forward(self, x, cu_lens, max_len, lora_names=None):
         '''
         Forward pass of the transformer layer.
 
@@ -236,7 +247,7 @@ class FlashTransformerLayer(nn.Module):
         Returns:
             torch.Tensor: The output tensor after applying the transformer layer 
         '''
-        x = x + self.self_attn(x, cu_lens, max_len) / self.residue_scaling
+        x = x + self.self_attn(x, cu_lens, max_len, lora_names) / self.residue_scaling
         return x + self.final(x) / self.residue_scaling
 
 

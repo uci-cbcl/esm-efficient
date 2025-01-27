@@ -253,7 +253,6 @@ def test_multihead_attention_varlen_len(embedding_token, multihead_attention,
 def test_multihead_attention_esmc(embedding_token_esmc, multihead_attention_esmc,
                                   flash_multihead_attention_esmc):
     embedding, token = embedding_token_esmc
-
     output = multihead_attention_esmc(embedding, token == 1)
 
     x_unpad, indices, cu_seqlens, max_seqlen, _ = unpad_input(

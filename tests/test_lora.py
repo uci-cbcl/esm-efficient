@@ -191,3 +191,12 @@ def test_lora_save_load(tmp_path):
                     getattr(layer.self_attn, j).lora_B.test_b,
                     sf.get_tensor(f'layers.{i}.self_attn.{j}.lora_B.test_b')
                 )
+
+
+def test_esme_lora(flash_esm2, token_p53):
+    flash_esm2.add_lora(16, 0.5, adapter_names=['x', 'y'])
+    out_all = flash_esm2(token_p53)
+    out_x = flash_esm2(token_p53, lora_names=['x'])
+    out_y = flash_esm2(token_p53, lora_names=['y'])
+    assert torch.allclose(out_all, out_x)
+    assert torch.allclose(out_all, out_y)
