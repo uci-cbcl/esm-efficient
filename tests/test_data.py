@@ -1,7 +1,8 @@
 import pytest
 import torch
 from esme.alphabet import tokenize
-from esme.data import read_fai, TokenSizeBatchSampler, FastaDataset, \
+from esme.fasta import read_fai
+from esme.data import TokenSizeBatchSampler, FastaDataset, \
     FastaTokenDataset, MaskedFastaDataset
 from conftest import fai_path, fasta_path
 
