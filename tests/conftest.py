@@ -97,7 +97,8 @@ def esm2_model():
 
 @pytest.fixture
 def esmc_model():
-    model = _ESMC(d_model=960, n_heads=15, n_layers=30, tokenizer=None)
+    model = _ESMC(d_model=960, n_heads=15, n_layers=30, 
+                  tokenizer=None, use_flash_attn=False)
     state_dict = torch.load(esmc_300M_model_path)
     model.load_state_dict(state_dict)
     return model.to(torch.bfloat16).to(device)

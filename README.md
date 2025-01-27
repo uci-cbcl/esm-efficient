@@ -135,6 +135,19 @@ To generate a specific figures in the paper, run the following command:
 snakemake reports/paper_figures/figure-2.pdf -n --use-conda 
 ```
 
+# Testing
+
+Install renamed esm package for testing:
+```bash
+pip install git+https://github.com/MuhammedHasan/fair-esm.git
+pip install esm
+```
+
+To run the tests, run the following command:
+```bash
+pytest tests/
+```
+
 # Citation
 Manuscript for the efficient implementation: [https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1](https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1)
 ```bib
