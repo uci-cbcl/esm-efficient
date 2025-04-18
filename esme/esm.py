@@ -47,7 +47,7 @@ class ESM(nn.Module):
                     f'Invalid model name: {path}. Must be one of {model_names}'
                 )
 
-        with safetensors.safe_open(path, "pt") as f:
+        with safetensors.safe_open(path, framework="pt", device="cpu") as f:
             name = f.metadata()['name'].split('_')[0]
 
         if name == 'esm1b':
@@ -80,7 +80,6 @@ class ESM2(nn.Module):
         embed_dim: int - the embedding dimension
         attention_heads: int - the number of attention heads
         checkpointing: bool - whether to use checkpointing for memory optimization
-        cpuoffload: bool - whether to offload the model to the cpu
         rotary_embedding: bool - whether to use rotary embeddings
         dtype: torch.dtype - the datatype of the
 
@@ -89,7 +88,6 @@ class ESM2(nn.Module):
         embed_dim: int - the embedding dimension
         attention_heads: int - the number of attention heads
         checkpointing: bool - whether to use checkpointing for memory optimization
-        cpuoffload: bool - whether to offload the model to the cpu
         embed_scale: float - the scale of the embeddings
         embed_tokens: nn.Embedding - the embedding layer
         layers: nn.ModuleList - the transformer layers
@@ -296,10 +294,9 @@ class ESM2(nn.Module):
 
         Args:
             path: str - path to the safetensor model file
-            cpuoffload: bool - whether to offload the model to the cpu for training
             checkpointing: bool - whether to use checkpointing for memory optimization
         '''
-        with safetensors.safe_open(path, "pt") as f:
+        with safetensors.safe_open(path, framework="pt", device="cpu") as f:
             metadata = f.metadata()
             name = metadata['name'].split('_')[0]
             assert name == cls.__name__.lower(), \
@@ -322,7 +319,6 @@ class ESM2(nn.Module):
             path: str - path to the safetensor model file to load from
             quantization: str - the quantization to use for the model weights.
                 One of(None, '8bit', '4bit').
-            cpuoffload: bool - whether to offload the model to the cpu for training
             checkpointing: bool - whether to use checkpointing for memory optimization
             device: str - the device to load the model.
         '''
@@ -596,15 +592,12 @@ class ESM1b(ESM2):
 
     Args:
         checkpointing: bool - whether to use checkpointing for memory optimization
-        cpuoffload: bool - whether to offload the model to the cpu
         dtype: torch.dtype - the datatype of the model
     '''
 
-    def __init__(self, checkpointing: bool = False, cpuoffload: bool = False,
-                 dtype=torch.bfloat16):
+    def __init__(self, checkpointing: bool = False, dtype=torch.bfloat16):
         super().__init__(num_layers=33, embed_dim=1280, attention_heads=20,
-                         checkpointing=checkpointing, cpuoffload=cpuoffload,
-                         rotary_embedding=False, dtype=dtype)
+                         checkpointing=checkpointing, rotary_embedding=False, dtype=dtype)
 
         self.emb_layer_norm_before = nn.LayerNorm(self.embed_dim, dtype=dtype)
         max_seq_len = 4096
@@ -612,14 +605,17 @@ class ESM1b(ESM2):
             max_seq_len, self.embed_dim)
 
     def embedding(self, tokens):
-        x, attention_mask = super().embedding(tokens)
+        x = self.embed_scale * self.embed_tokens(tokens)
+        x.masked_fill_((tokens == Alphabet.mask_idx).unsqueeze(-1), .0)
+
+        if tokens.ndim != 2:
+            raise ValueError('tokens must be 2D for esm1b')
+
         x = self.emb_layer_norm_before(x + self.embed_positions(tokens))
+        x = torch.where(~tokens.eq(Alphabet.padding_idx).unsqueeze(-1),
+                        x, torch.zeros_like(x))
 
-        if attention_mask is not None:
-            x = torch.where(attention_mask.unsqueeze(-1),
-                            x, torch.zeros_like(x))
-
-        return x, attention_mask
+        return x
 
     @classmethod
     def _load_emb_layer(cls, model, path, device):
@@ -642,8 +638,8 @@ class ESM1b(ESM2):
         return super()._load_4bit(model, path, device)
 
     @classmethod
-    def create_model(cls, path, cpuoffload=False, checkpointing=False):
-        return cls(cpuoffload=cpuoffload, checkpointing=checkpointing)
+    def create_model(cls, path, checkpointing=False):
+        return cls(checkpointing=checkpointing)
 
 
 class ESM1v(ESM2):
@@ -652,34 +648,35 @@ class ESM1v(ESM2):
 
     Args:
         checkpointing: bool - whether to use checkpointing for memory optimization
-        cpuoffload: bool - whether to offload the model to the cpu
         dtype: torch.dtype - the datatype of the model
     '''
 
-    def __init__(self, checkpointing: bool = False, cpuoffload: bool = False,
-                 dtype=torch.bfloat16):
+    def __init__(self, checkpointing: bool = False, dtype=torch.bfloat16):
         super().__init__(num_layers=33, embed_dim=1280, attention_heads=20,
-                         checkpointing=checkpointing, cpuoffload=cpuoffload,
-                         rotary_embedding=False, dtype=dtype)
+                         checkpointing=checkpointing, rotary_embedding=False, dtype=dtype)
         max_seq_len = 4096
         self.embed_positions = LearnedPositionalEmbedding(
             max_seq_len, self.embed_dim)
 
     def embedding(self, tokens):
-        x, attention_mask = super().embedding(tokens)
+        x = self.embed_scale * self.embed_tokens(tokens)
+        x.masked_fill_((tokens == Alphabet.mask_idx).unsqueeze(-1), .0)
+
+        if tokens.ndim != 2:
+            raise ValueError('tokens must be 2D for esm1b')
+
         x += self.embed_positions(tokens)
-
-        x = torch.where(attention_mask.unsqueeze(-1), x, torch.zeros_like(x))
-
-        return x, attention_mask
+        x = torch.where(~tokens.eq(Alphabet.padding_idx).unsqueeze(-1),
+                        x, torch.zeros_like(x))
+        return x
 
     @classmethod
-    def create_model(cls, path, cpuoffload=False, checkpointing=False):
-        return cls(cpuoffload=cpuoffload, checkpointing=checkpointing)
+    def create_model(cls, path, checkpointing=False):
+        return cls(checkpointing=checkpointing)
 
     @classmethod
     def _load_emb_layer(cls, model, path, device):
-        with safetensors.safe_open(path, framework="pt", device='cpu') as f:
+        with safetensors.safe_open(path, framework="pt", device="cpu") as f:
             model.embed_positions.weight = nn.Parameter(
                 f.get_tensor('embed_positions.weight'))
 

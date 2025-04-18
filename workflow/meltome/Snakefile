@@ -4,6 +4,7 @@ rule finetune_meltome_train:
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
+        devices=[3],
         epochs=100,
         checkpoint_dir=config["meltome"]["checkpoint_dir"].replace(
             "{lora}/", "{lora}_head={head}/"
@@ -31,7 +32,7 @@ rule finetune_meltome_test:
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
-        device=4,
+        device=3,
     output:
         predictions=config["meltome"]["predictions"],
         scatter_test=f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",

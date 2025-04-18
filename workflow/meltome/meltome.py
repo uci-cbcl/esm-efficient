@@ -17,7 +17,7 @@ class MeltomeDataset(Dataset):
         self.labels = labels
 
         self.sampler = list(iter(TokenSizeBatchSampler(
-            [len(seq) for seq in seqs], token_per_batch, 
+            [len(seq) for seq in seqs], token_per_batch,
             shuffle=shuffle, random_state=random_state)))
 
     def __len__(self):
@@ -26,7 +26,7 @@ class MeltomeDataset(Dataset):
     def __getitem__(self, idx):
         indices = self.sampler[idx]
         tokens, _indices, cu_lens, max_len = tokenize_unpad(
-            [self.seqs[i] for i in indices]) 
+            [self.seqs[i] for i in indices])
         return {
             'token': tokens,
             'cu_lens': cu_lens,
@@ -78,6 +78,7 @@ class MeltomeDataModule(L.LightningDataModule):
     def set_epoch(self, epoch):
         self.current_epoch = epoch
 
+
 class MeltomeModel(L.LightningModule):
 
     def __init__(self, model_path, checkpointing=True, lr=1e-5, lr_head=1e-4,
@@ -108,7 +109,8 @@ class MeltomeModel(L.LightningModule):
         return self.head(embed.mean(dim=1)).squeeze(1) * 100
 
     def _loss(self, batch):
-        y = self(batch['token'], (batch['cu_lens'], batch['max_len']), batch['indices'])
+        y = self(batch['token'], (batch['cu_lens'],
+                 batch['max_len']), batch['indices'])
         return F.mse_loss(y, batch['label'], reduction='sum'), y
 
     def training_step(self, batch, batch_idx):
@@ -129,7 +131,8 @@ class MeltomeModel(L.LightningModule):
             {'params': self.head.parameters(), 'lr': self.lr_head},
             {'params': self.plm.parameters()}
         ], lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(adam, gamma=.9, step_size=10)
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            adam, gamma=.9, step_size=10)
         return {
             "optimizer": adam,
             "lr_scheduler": {

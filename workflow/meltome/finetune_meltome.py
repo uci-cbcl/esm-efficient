@@ -6,12 +6,12 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 import safetensors.torch as safetensors
 from esme.data import SetEpochCallback
-from .meltome import MeltomeDataModule, MeltomeModel
+from workflow.meltome.meltome import MeltomeDataModule, MeltomeModel
 
 
 torch.set_float32_matmul_precision('medium')
 
-devices = [0]
+devices = snakemake.params['devices']
 
 quantization = snakemake.wildcards['quantize']
 quantization = None if quantization == 'none' else quantization

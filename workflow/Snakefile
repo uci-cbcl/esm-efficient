@@ -32,9 +32,9 @@ finetune_wildcards = "model={model}_q={quantize}_c={checkpointing}_lora={lora}"
 baseline_models = list(config["esm"].keys())
 models = [f"{i}e" for i in baseline_models]
 models_esm2 = [
-    i for i in baseline_models 
-    if not (i.startswith("1b") or i.startswith("1v"))
+    i for i in baseline_models if not (i.startswith("1b") or i.startswith("1v"))
 ]
+
 
 include: "download/Snakefile"
 include: "common/Snakefile"
@@ -43,12 +43,43 @@ include: "inference/Snakefile"
 include: "variant/Snakefile"
 include: "train/Snakefile"
 include: "meltome/Snakefile"
+include: "gb1/Snakefile"
 include: "tf/Snakefile"
 include: "figures/Snakefile"
+
+
 # include: "upload/Snakefile"
 
 
 rule all:
     input:
-        rules.all_figures.input,
+        rules.all_gb1.input,
+        # expand(
+        #     f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
+        #     model=["8Me", "35Me", "150Me"],
+        #     lora=[
+        #         "16;query",
+        #         "16;key",
+        #         "16;value",
+        #         "16;output",
+        #         "16;query,output",
+        #         "16;query,value,output",
+        #         "32;query",
+        #         "32;key",
+        #         "32;value",
+        #         "32;output",
+        #         "32;query,output",
+        #         "32;query,value,output",
+        #         "64;query",
+        #         "64;key",
+        #         "64;value",
+        #         "64;output",
+        #         "64;query,output",
+        #         "64;query,value,output",
+        #     ],
+        #     quantize=["none"],
+        #     checkpointing=True,
+        #     head=["nn"],
+        # ),
+        # rules.all_inference.input,
         # rules.all_upload.input,

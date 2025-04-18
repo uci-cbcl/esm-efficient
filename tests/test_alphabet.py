@@ -1,7 +1,7 @@
 import torch
 from flash_attn.bert_padding import unpad_input
 from esme.alphabet import tokenize, mask_tokens, tokenize_unpad, \
-    split_alphabet, token_to_str, Alphabet, pad_tokens
+    split_alphabet, token_to_str, Alphabet, pad_tokens, padding_mask
 from conftest import p53_human, calm1_human
 
 
@@ -61,7 +61,7 @@ def test_tokenize_unpad():
     ]))
     assert cu_lens.tolist() == [0, len(p53_human) + 2, len(p53_human) * 3 + 4]
     assert max_len == len(p53_human) * 2 + 2
-    
+
     seqs = [p53_human, p53_human + p53_human, calm1_human]
     tokens, indices, cu_lens, max_len = tokenize_unpad(seqs)
 
@@ -118,3 +118,18 @@ def test_split_alphabet():
 def test_token_to_str():
     seq = p53_human[:10] + '<mask>' + p53_human[11:]
     assert token_to_str(tokenize(seq)) == ['<cls>' + seq + '<eos>']
+
+
+def test_padding_mask():
+
+    cu_lens = torch.tensor([0, 4, 10], dtype=torch.int32)
+    max_len = 6
+
+    mask = padding_mask(cu_lens, max_len)
+
+    expected_mask = torch.tensor([
+        [True, True, True, True, False, False],
+        [True, True, True, True, True, True]
+    ])
+
+    assert torch.equal(mask, expected_mask)

@@ -37,22 +37,22 @@ rule uniport_hist:
 
 rule safetensor:
     input:
-        model=model
+        model=model,
     wildcard_constraints:
         model="[0-9]+[MB]",
     output:
-        model=config["safetensor"]['esm2'],
+        model=config["safetensor"]["esm2"],
     script:
         "./safetensor.py"
 
 
 rule safetensor_esmc:
     input:
-        model=model
+        model=model,
     wildcard_constraints:
         model="c.+m",
     output:
-        model=config["safetensor"]['esmc'],
+        model=config["safetensor"]["esmc"],
     script:
         "./safetensor_c.py"
 
@@ -60,11 +60,11 @@ rule safetensor_esmc:
 rule all_common:
     input:
         expand(
-            config["safetensor"]['esmc'],
+            config["safetensor"]["esmc"],
             model=["c300m", "c600m"],
         ),
         expand(
-            config["safetensor"]['esm2'],
+            config["safetensor"]["esm2"],
             model=["8M", "35M", "150M", "650M", "3B", "15B"],
         ),
         # rules.uniport_hist.output,

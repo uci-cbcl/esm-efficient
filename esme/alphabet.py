@@ -263,3 +263,24 @@ def mask_tokens(token: torch.Tensor, freq: float = 0.15, alter: float = 0.1, alp
     )
 
     return token, mask
+
+
+def padding_mask(cu_lens: torch.Tensor, max_len: int) -> torch.Tensor:
+    """
+    Create a padding mask matrix from cumulative lengths and maximum sequence length.
+
+    Args:
+        cu_lens (Tensor): A 1D tensor of cumulative lengths with shape (n+1,).
+                           For example, if you have n sequences with lengths L_i (including the <cls> and <eos> tokens),
+                           then cu_lens = torch.tensor([0, L_1, L_1 + L_2, ..., sum(L_i)]).
+        max_len (int): The maximum sequence length among the sequences (including the added tokens).
+
+    Returns:
+        Tensor: A boolean tensor of shape (n, max_len) where True indicates valid token positions and False indicates padding.
+    """
+    lengths = cu_lens[1:] - cu_lens[:-1]
+    n = lengths.size(0)
+
+    mask = torch.arange(max_len, device=cu_lens.device) \
+        .unsqueeze(0).expand(n, max_len)
+    return mask < lengths.unsqueeze(1)

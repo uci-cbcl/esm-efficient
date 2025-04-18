@@ -1,0 +1,67 @@
+rule gb1_train:
+    input:
+        model=model,
+        fasta=config["gb1"]["dataset"],
+    threads: 16
+    params:
+        devices=[0],
+        epochs=250,
+        checkpoint_dir=config["gb1"]["checkpoint_dir"],
+        token_per_batch=10_000
+    output:
+        lora_weights=config["gb1"]["lora_weights"],
+        head_weights=config["gb1"]["head_weights"],
+    script:
+        "train_gb1.py"
+
+
+rule gb1_test:
+    input:
+        model=model,
+        fasta=config["gb1"]["dataset"],
+        lora_weights=config["gb1"]["lora_weights"],
+        head_weights=config["gb1"]["head_weights"],
+    threads: 16
+    params:
+        device=0,
+    output:
+        pred=config['gb1']['pred'],
+        fig='reports/gb1/gb1_scatter_m={model}_l={lora}.png'
+    notebook:
+        "test_gb1.py.ipynb"
+
+
+rule aav_train:
+    input:
+        model=model,
+        fasta=config["aav"]["dataset"],
+    threads: 16
+    params:
+        token_per_batch=10_000,
+        devices=[0],
+        epochs=250,
+        checkpoint_dir=config["aav"]["checkpoint_dir"],
+    output:
+        lora_weights=config["aav"]["lora_weights"],
+        head_weights=config["aav"]["head_weights"],
+    script:
+        "train_aav.py"
+
+# TODO: test
+# TODO: plot sequences
+
+rule all_gb1:
+    input:
+        expand(
+            config["aav"]["head_weights"],
+            model=["35Me"], # , "3Be", "150Me"
+            lora=["none"]
+            # lora=["16;query,value,output"],
+        ),
+
+        # expand(
+        #     'reports/gb1/gb1_scatter_m={model}_l={lora}.png',
+        #     model=["650Me"], # , "3Be" 
+        #     lora=["none"]
+        #     # lora=["16;query,value,output"],
+        # ),
