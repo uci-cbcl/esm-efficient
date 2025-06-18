@@ -20,9 +20,12 @@ esm:
   c300m: data/resources/esm/esmc_300m_2024_12_v0.pth
   c600m: data/resources/esm/esmc_600m_2024_12_v0.pth
 
+# download precreated safetensors or generate them (default: true = download)
+safetensors_download: true
+
 safetensor:
-  esm1b: data/results/models/1b/_esm1b.safetensors
-  esm1v: data/results/models/1v/1v_{ens}.safetensors
+  esm1b: data/results/models/1b/esm1b.safetensors
+  esm1v: data/results/models/1v/esm1v_{ens}.safetensors
   esmc: data/results/safetensor/c/{model}.safetensors
   esm2: data/results/safetensor/{model}.safetensors
 
@@ -58,7 +61,7 @@ gb1:
   head_weights: data/results/gb1/head_model={model}_lora={lora}.safetensors
   checkpoint_dir: data/results/gb1/checkpoints/model={model}_lora={lora}/
 
-  pred: data/results/gb1/preds/model={model}_lora={lora}.csv
+  preds: data/results/gb1/preds/model={model}_lora={lora}.csv
 
 aav:
   dataset: data/resources/flip/aav/low_vs_high.fasta

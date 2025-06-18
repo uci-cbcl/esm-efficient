@@ -173,7 +173,7 @@ class ESM2(nn.Module):
 
         self.lm_head = RobertaLMHead(self.embed_dim, 33, dtype=dtype)
 
-    def embedding(self, tokens):
+    def embedding(self, tokens, pad_args=None):
         '''
         Get the embeddings given the tokens.
 
@@ -211,7 +211,7 @@ class ESM2(nn.Module):
             pad_output: bool - whether to pad the output to the maximum length
             pad_indices: torch.Tensor - the indices of the padded tokens
         '''
-        x = self.embedding(tokens)
+        x = self.embedding(tokens, pad_args)
 
         if pad_args is not None:
             assert tokens.ndim == 1, \
@@ -604,14 +604,22 @@ class ESM1b(ESM2):
         self.embed_positions = LearnedPositionalEmbedding(
             max_seq_len, self.embed_dim)
 
-    def embedding(self, tokens):
+    def embedding(self, tokens, pad_args=None):
         x = self.embed_scale * self.embed_tokens(tokens)
         x.masked_fill_((tokens == Alphabet.mask_idx).unsqueeze(-1), .0)
 
-        if tokens.ndim != 2:
-            raise ValueError('tokens must be 2D for esm1b')
+        if tokens.ndim == 2:
+            assert pad_args is None, \
+                "pad_args must be None for esm1b with 2D tokens"
+            x += self.embed_positions(tokens)
+        elif tokens.ndim == 1:
+            assert pad_args is not None, \
+                "pad_args must be provided for esm1b with 1D tokens"
+            x += self.embed_positions(tokens, pad_args)
+        else:
+            raise ValueError('tokens must be 1D or 2D for esm1v')
 
-        x = self.emb_layer_norm_before(x + self.embed_positions(tokens))
+        x = self.emb_layer_norm_before(x)
         x = torch.where(~tokens.eq(Alphabet.padding_idx).unsqueeze(-1),
                         x, torch.zeros_like(x))
 
@@ -658,14 +666,21 @@ class ESM1v(ESM2):
         self.embed_positions = LearnedPositionalEmbedding(
             max_seq_len, self.embed_dim)
 
-    def embedding(self, tokens):
+    def embedding(self, tokens, pad_args=None):
         x = self.embed_scale * self.embed_tokens(tokens)
         x.masked_fill_((tokens == Alphabet.mask_idx).unsqueeze(-1), .0)
 
-        if tokens.ndim != 2:
-            raise ValueError('tokens must be 2D for esm1b')
+        if tokens.ndim == 2:
+            assert pad_args is None, \
+                "pad_args must be None for esm1b with 2D tokens"
+            x += self.embed_positions(tokens)
+        elif tokens.ndim == 1:
+            assert pad_args is not None, \
+                "pad_args must be provided for esm1b with 1D tokens"
+            x += self.embed_positions(tokens, pad_args)
+        else:
+            raise ValueError('tokens must be 1D or 2D for esm1v')
 
-        x += self.embed_positions(tokens)
         x = torch.where(~tokens.eq(Alphabet.padding_idx).unsqueeze(-1),
                         x, torch.zeros_like(x))
         return x

@@ -158,32 +158,43 @@ rule inference_perplexity:
         model=model,
     params:
         num_proteins=512,
-        device=2,
+        device=0,
     threads: 16
     output:
         perplexity="reports/tables/perplexity_model={model}.tsv",
     script:
         "./perplexity.py"
 
-# TODO: cosine similarity?
 
 rule inference_perplexity_plot:
     input:
         perplexity=expand(
             "reports/tables/perplexity_model={model}.tsv",
-            model=["8M", "8Me", "35M", "35Me", "150M", "150Me", "650M", "650Me", "3B", "3Be"] # , "15Be"],
+            model=[
+                "1v1", "1ve1",
+                "1b", "1be", 
+                "8M", "8Me", 
+                "35M", "35Me", 
+                "150M", "150Me", 
+                "650M", "650Me", 
+                "3B", "3Be",
+                "15B", "15Be",
+                "c300m", "c300me",
+                "c600m", "c600me",
+            ]
         ),
     threads: 1
     output:
         fig="reports/figures/perplexity_human_proteins.png",
+        stats="reports/tables/perplexity_human_proteins.csv",
     notebook:
         "./perplexity_plot.py.ipynb"
 
 
 rule all_inference:
     input:
-        expand("reports/tables/perplexity_model={model}.tsv", model=["1ve1"])
-        # rules.inference_perplexity_plot.input,
+        rules.inference_perplexity_plot.output,
+        # expand("reports/tables/perplexity_model={model}.tsv", model=["1ve1"])
         # rules.inference_figure_memory.output,
         # rules.inference_figure_runtime.output,
         # rules.batch_size_protein_tokens.output,

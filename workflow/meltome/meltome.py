@@ -5,40 +5,40 @@ import torchmetrics
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import lightning as L
-from esme import ESM2
+from esme import ESM
 from esme.alphabet import tokenize_unpad
-from esme.data import TokenSizeBatchSampler
+from esme.data import TokenSizeBatchSampler, LabeledDataset
 
 
-class MeltomeDataset(Dataset):
+# class MeltomeDataset(Dataset):
 
-    def __init__(self, seqs, labels, token_per_batch, shuffle=True, random_state=None):
-        self.seqs = seqs
-        self.labels = labels
+#     def __init__(self, seqs, labels, token_per_batch, shuffle=True, random_state=None):
+#         self.seqs = seqs
+#         self.labels = labels
 
-        self.sampler = list(iter(TokenSizeBatchSampler(
-            [len(seq) for seq in seqs], token_per_batch,
-            shuffle=shuffle, random_state=random_state)))
+#         self.sampler = list(iter(TokenSizeBatchSampler(
+#             [len(seq) for seq in seqs], token_per_batch,
+#             shuffle=shuffle, random_state=random_state)))
 
-    def __len__(self):
-        return len(self.sampler)
+#     def __len__(self):
+#         return len(self.sampler)
 
-    def __getitem__(self, idx):
-        indices = self.sampler[idx]
-        tokens, _indices, cu_lens, max_len = tokenize_unpad(
-            [self.seqs[i] for i in indices])
-        return {
-            'token': tokens,
-            'cu_lens': cu_lens,
-            'max_len': max_len,
-            'indices': _indices,
-            'label': torch.tensor([self.labels[i] for i in indices], dtype=torch.bfloat16)
-        }
+#     def __getitem__(self, idx):
+#         indices = self.sampler[idx]
+#         tokens, _indices, cu_lens, max_len = tokenize_unpad(
+#             [self.seqs[i] for i in indices])
+#         return {
+#             'token': tokens,
+#             'cu_lens': cu_lens,
+#             'max_len': max_len,
+#             'indices': _indices,
+#             'label': torch.tensor([self.labels[i] for i in indices], dtype=torch.bfloat16)
+#         }
 
 
 class MeltomeDataModule(L.LightningDataModule):
 
-    def __init__(self, path, token_per_batch=None, num_workers=0):
+    def __init__(self, path, token_per_batch=None, num_workers=0, truncate_len=None):
         super().__init__()
         df = pd.read_csv(path)
         self.df_test = df.query('set == "test"')
@@ -50,16 +50,18 @@ class MeltomeDataModule(L.LightningDataModule):
 
         self.token_per_batch = token_per_batch
         self.num_workers = num_workers
+        self.truncate_len = truncate_len
         self.current_epoch = None
 
     def _dataloder(self, df, shuffle=True, **kwargs):
         return DataLoader(
-            dataset=MeltomeDataset(
+            dataset=LabeledDataset(
                 df['sequence'].values.tolist(),
                 df['target'].values.tolist(),
                 token_per_batch=self.token_per_batch,
                 shuffle=shuffle,
-                random_state=self.current_epoch
+                random_state=self.current_epoch,
+                truncate_len=self.truncate_len,
             ),
             num_workers=self.num_workers,
             batch_size=None,
@@ -87,8 +89,8 @@ class MeltomeModel(L.LightningModule):
         self.lr = lr
         self.lr_head = lr_head
 
-        self.plm = ESM2.from_pretrained(model_path, checkpointing=checkpointing,
-                                        device=device)
+        self.plm = ESM.from_pretrained(model_path, checkpointing=checkpointing, 
+                                       device=device)
 
         if lora_kwargs is not None:
             self.plm.add_lora(**lora_kwargs)

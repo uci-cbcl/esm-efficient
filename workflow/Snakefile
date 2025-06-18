@@ -38,7 +38,8 @@ models_esm2 = [
 
 include: "download/Snakefile"
 include: "common/Snakefile"
-include: "positional_emb/Snakefile"
+if not config["safetensors_download"]:
+    include: "positional_emb/Snakefile"
 include: "inference/Snakefile"
 include: "variant/Snakefile"
 include: "train/Snakefile"
@@ -53,33 +54,7 @@ include: "figures/Snakefile"
 
 rule all:
     input:
-        rules.all_gb1.input,
-        # expand(
-        #     f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
-        #     model=["8Me", "35Me", "150Me"],
-        #     lora=[
-        #         "16;query",
-        #         "16;key",
-        #         "16;value",
-        #         "16;output",
-        #         "16;query,output",
-        #         "16;query,value,output",
-        #         "32;query",
-        #         "32;key",
-        #         "32;value",
-        #         "32;output",
-        #         "32;query,output",
-        #         "32;query,value,output",
-        #         "64;query",
-        #         "64;key",
-        #         "64;value",
-        #         "64;output",
-        #         "64;query,output",
-        #         "64;query,value,output",
-        #     ],
-        #     quantize=["none"],
-        #     checkpointing=True,
-        #     head=["nn"],
-        # ),
-        # rules.all_inference.input,
+        rules.all_common.input,
+        # rules.all_meltome.input,
+        # rules.inference_figure_memory.output,
         # rules.all_upload.input,

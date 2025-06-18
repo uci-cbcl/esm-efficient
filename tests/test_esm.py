@@ -4,7 +4,7 @@ from einops import rearrange
 from torchmetrics.text import Perplexity
 from safetensors.torch import safe_open
 from esme.alphabet import tokenize_unpad, Alphabet3
-from esme.esm import ESM2, ESM
+from esme.esm import ESM2, ESM, ESM1v, ESM1b
 from conftest import device, esm2e_8M_path, p53_human
 
 
@@ -80,6 +80,29 @@ def test_esm2_p53(token_p53, flash_esm2, esm2_model):
     )
     assert all(sim > .99)
 
+
+def test_esm1b_p53(token_p53):
+    esm1b = ESM1b().to(device)
+    logit = esm1b(token_p53.to(device))
+
+    tokens_unpad, indices, cu_lens, max_len = tokenize_unpad([p53_human])
+    tokens_unpad = tokens_unpad.to(device)
+    cu_lens = cu_lens.to(device)
+
+    logit_packed = esm1b(tokens_unpad.to(device), (cu_lens, max_len))
+    assert torch.all(logit == logit_packed)
+
+
+def test_esm1v_p53(token_p53):
+    esm1v = ESM1v().to(device)
+    logit = esm1v(token_p53.to(device))
+
+    tokens_unpad, indices, cu_lens, max_len = tokenize_unpad([p53_human])
+    tokens_unpad = tokens_unpad.to(device)
+    cu_lens = cu_lens.to(device)
+
+    logit_packed = esm1v(tokens_unpad.to(device), (cu_lens, max_len))
+    assert torch.all(logit == logit_packed)
 
 def test_ESM2_from_pretrained():
     model = ESM2.from_pretrained(esm2e_8M_path)

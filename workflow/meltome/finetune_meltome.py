@@ -44,10 +44,15 @@ if wld_lora == 'none':
     for p in model.plm.parameters():
         p.requires_grad = False
 
+truncate_len=None
+if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
+    truncate_len = 4096 - 2
+
 datamodule = MeltomeDataModule(
     snakemake.input['dataset'],
     token_per_batch=50_000,
     num_workers=0,
+    truncate_len=truncate_len,
 )
 
 checkpoint_callback = ModelCheckpoint(

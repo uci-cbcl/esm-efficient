@@ -51,6 +51,7 @@ rule figure_2:
 
 rule figure_3:
     input:
+        fig_perplexity="reports/figures/perplexity_human_proteins.png",
         fig_variant="reports/figures/proteingym_maskmargin_spearman.svg",
     params:
         fontsize=42,
@@ -63,9 +64,12 @@ rule figure_3:
         fig_pdf="reports/paper_figures/figure-3.pdf",
         fig_png="reports/paper_figures/figure-3.png",
     run:
-        shell(f"cairosvg -W {params.width} {input.fig_variant} -o {output.fig_pdf}")
+        template = f"[{input.fig_perplexity}],[{input.fig_variant}]"
         shell(
-            f"cairosvg --dpi 300 -W {params.width} {input.fig_variant} -o {output.fig_png}"
+            f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
+        )
+        shell(
+            f'figure_panel -f "{template}" -o {output.fig_png} --fontsize {params.fontsize * 4} --width {params.width * 4} --lettercase {params.lettercase}'
         )
 
 
@@ -98,6 +102,8 @@ rule figure_5:
     input:
         fig_melting="reports/figures/meltome_scatter_test_model=3Be_q=none_c=True_lora=none_head=nn.svg",
         fig_bar="reports/figures/meltome_barplot.svg",
+        fig_gb1="reports/figures/gb1_barplot.svg",
+        fig_aav="reports/figures/aav_barplot.svg",
     params:
         fontsize=42,
         width=1200,
@@ -109,7 +115,7 @@ rule figure_5:
         fig_pdf="reports/paper_figures/figure-5.pdf",
         fig_png="reports/paper_figures/figure-5.png",
     run:
-        template = f"{input.fig_melting},{input.fig_bar}"
+        template = f"[{input.fig_melting},{input.fig_bar}],[{input.fig_gb1},{input.fig_aav}]"
         shell(
             f'figure_panel -f "{template}" -o {output.fig_pdf} --fontsize {params.fontsize} --width {params.width} --lettercase {params.lettercase}'
         )
@@ -309,14 +315,17 @@ rule sup_figure_9:
 rule sup_table:
     input:
         tables=[
-            "data/reports/tables/inference_memory.csv",
-            "data/reports/tables/inference_runtime.csv",
-            "data/reports/tables/proteingym_maskmargin_spearman.csv",
-            "data/reports/tables/train_memory.csv",
-            "data/reports/tables/train_runtime_stats.csv",
-            "data/reports/tables/meltome_barplot_stats.tsv",
-            "data/reports/tables/tf_roc_performance.tsv",
-            "data/reports/tables/tf_precision_recall_performance.tsv",
+            "reports/tables/inference_memory.csv",
+            "reports/tables/inference_runtime.csv",
+            "reports/tables/perplexity_human_proteins.csv",
+            "reports/tables/proteingym_maskmargin_spearman.csv",
+            "reports/tables/train_memory.csv",
+            "reports/tables/train_runtime_stats.csv",
+            "reports/tables/meltome_barplot_stats.tsv",
+            "reports/tables/gb1_barplot_stats.csv",
+            "reports/tables/aav_barplot_stats.csv",
+            "reports/tables/tf_roc_performance.tsv",
+            "reports/tables/tf_precision_recall_performance.tsv",
             "workflow/config/tf_go_terms.txt",
         ],
     output:

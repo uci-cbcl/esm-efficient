@@ -376,13 +376,20 @@ class SetEpochCallback(L.pytorch.callbacks.Callback):
 
 class LabeledDataset(Dataset):
 
-    def __init__(self, seqs, labels, token_per_batch, shuffle=True, random_state=None):
+    def __init__(self, seqs, labels, token_per_batch, shuffle=True, 
+                 random_state=None, truncate_len=None):
         self.seqs = seqs
         self.labels = labels
+        self.truncate_len = truncate_len
 
         self.sampler = list(iter(TokenSizeBatchSampler(
             [len(seq) for seq in seqs], token_per_batch,
             shuffle=shuffle, random_state=random_state)))
+
+    def truncate(self, seq):
+        if (self.truncate_len is not None) and (len(seq) > self.truncate_len):
+            return seq[:self.truncate_len]
+        return seq
 
     def __len__(self):
         return len(self.sampler)
@@ -390,7 +397,7 @@ class LabeledDataset(Dataset):
     def __getitem__(self, idx):
         indices = self.sampler[idx]
         tokens, _indices, cu_lens, max_len = tokenize_unpad(
-            [self.seqs[i] for i in indices])
+            [self.truncate(self.seqs[i]) for i in indices])
         return {
             'token': tokens,
             'cu_lens': cu_lens,
@@ -403,7 +410,8 @@ class LabeledDataset(Dataset):
 class LabeledDataModule(L.LightningDataModule):
 
     def __init__(self, train_seqs, train_labels, val_seqs, val_labels,
-                 test_seqs=None, test_labels=None, token_per_batch=None, num_workers=0):
+                 test_seqs=None, test_labels=None, token_per_batch=None,
+                 truncate_len=None, num_workers=0):
         super().__init__()
         self.train_seqs = train_seqs
         self.train_labels = train_labels
@@ -413,6 +421,7 @@ class LabeledDataModule(L.LightningDataModule):
         self.test_labels = test_labels
 
         self.token_per_batch = token_per_batch
+        self.truncate_len = truncate_len
         self.num_workers = num_workers
         self.current_epoch = None
 
@@ -422,6 +431,7 @@ class LabeledDataModule(L.LightningDataModule):
                 seqs,
                 labels,
                 token_per_batch=self.token_per_batch,
+                truncate_len=self.truncate_len,
                 shuffle=shuffle,
                 random_state=self.current_epoch
             ),
@@ -433,10 +443,10 @@ class LabeledDataModule(L.LightningDataModule):
     def train_dataloader(self):
         return self._dataloder(self.train_seqs, self.train_labels, shuffle=True)
 
-    def test_dataloader(self):
+    def val_dataloader(self):
         return self._dataloder(self.val_seqs, self.val_labels, shuffle=False)
 
-    def val_dataloader(self):
+    def test_dataloader(self):
         return self._dataloder(self.test_seqs, self.test_labels, shuffle=False)
 
     def set_epoch(self, epoch):

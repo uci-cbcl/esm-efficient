@@ -8,7 +8,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 import safetensors.torch as safetensors
 from esme.data import SetEpochCallback
-from esme import ESM2
+from esme import ESM
 from esme.pooling import BinaryLearnedAggregation
 from esme.trainer import RegressionTrainer
 from workflow.gb1.gb1 import Gb1DataModule
@@ -16,9 +16,14 @@ from workflow.gb1.gb1 import Gb1DataModule
 
 torch.set_float32_matmul_precision('medium')
 
+truncate_len=None
+if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
+    truncate_len = 4096
+
 datamodule = Gb1DataModule(
     snakemake.input['fasta'],
     token_per_batch=snakemake.params['token_per_batch'],
+    truncate_len=truncate_len,
     num_workers=snakemake.threads,
 )
 
@@ -26,7 +31,7 @@ devices = snakemake.params['devices']
 lora_kwargs = None
 
 
-_model = ESM2.from_pretrained(
+_model = ESM.from_pretrained(
     snakemake.input['model'], checkpointing=True, device=devices[0])
 
 wld_lora = snakemake.wildcards['lora']
@@ -82,7 +87,6 @@ model = RegressionTrainer(
 
 #     x = head(embed, pad_args)
 #     print(x.shape)
-#     breakpoint()
 
 #     pred = model.training_step({
 #         'token': batch['token'].to(devices[0]),

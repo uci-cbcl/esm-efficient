@@ -9,73 +9,29 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 import safetensors.torch as safetensors
 from esme.data import SetEpochCallback, LabeledDataModule
-from esme import ESM2
+from esme import ESM
 from esme.pooling import BinaryLearnedAggregation
 from esme.trainer import RegressionTrainer
-# from workflow.gb1.gb1 import Gb1DataModule
+from workflow.gb1.aav import AavDataModule
 
 
 torch.set_float32_matmul_precision('medium')
 
-class Gb1DataModule(LabeledDataModule):
+truncate_len=None
+if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
+    truncate_len = 4096
 
-    def __init__(self, fasta_path, token_per_batch=None, num_workers=0):
-        ''''''
-        self.token_per_batch = token_per_batch
-        self.num_workers = num_workers
-        df = list()
-
-        with open(fasta_path, 'r') as f:
-            seq = list()
-            for line in f:
-                if line.startswith('>'):
-                    if seq:
-                        df.append({
-                            'seq': ''.join(seq),
-                            'label': label,
-                            'split': 'val' if validation else split
-                        })
-                        seq = list()
-                    _, label, split, validation = line.split()
-                    label = float(label.split('=')[1])
-                    split = split.split('=')[1]
-                    validation = validation.split('=')[1] == 'True'
-                else:
-                    seq.append(line.strip())
-            if seq:
-                df.append({
-                    'seq': ''.join(seq),
-                    'label': label,
-                    'split': 'val' if validation else split
-                })
-
-        df = pd.DataFrame(df)
-        df_train = df[df['split'] == 'train']
-        df_val = df[df['split'] == 'val']
-        df_test = df[df['split'] == 'test']
-
-        super().__init__(
-            train_seqs=df_train['seq'].tolist(),
-            train_labels=(df_train['label'] / 10 + .5).tolist(),
-            val_seqs=df_val['seq'].tolist(),
-            val_labels=(df_val['label'] / 20 + .5).tolist(),
-            test_seqs=df_test['seq'].tolist(),
-            test_labels=(df_test['label'] / 20 + .5).tolist(),
-            token_per_batch=token_per_batch,
-            num_workers=self.num_workers
-        )
-
-datamodule = Gb1DataModule(
+datamodule = AavDataModule(
     snakemake.input['fasta'],
     token_per_batch=snakemake.params['token_per_batch'],
+    truncate_len=truncate_len,
     num_workers=snakemake.threads,
 )
 
 devices = snakemake.params['devices']
 lora_kwargs = None
 
-_model = ESM2.from_pretrained(
-    snakemake.input['model'], checkpointing=True, device=devices[0])
+_model = ESM.from_pretrained(snakemake.input['model'], checkpointing=True, device=devices[0])
 
 wld_lora = snakemake.wildcards['lora']
 if wld_lora != 'none':
@@ -92,32 +48,7 @@ head = BinaryLearnedAggregation(_model.attention_heads, _model.embed_dim, dtype=
 lr = 1e-5
 lr_head = 1e-4
 
-model = RegressionTrainer(
-    _model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
-
-# for batch in datamodule.train_dataloader():
-
-#     pad_args = (batch['cu_lens'].to(devices[0]), batch['max_len'])
-
-#     embed = _model.forward_representation(
-#         batch['token'].to(devices[0]),
-#         pad_args,
-#         pad_output=False,
-#         pad_indices=batch['indices'].to(devices[0]),
-#     )
-#     # print(embed.shape)
-
-#     x = head(embed, pad_args)
-#     print(x.shape)
-#     breakpoint()
-
-#     pred = model.training_step({
-#         'token': batch['token'].to(devices[0]),
-#         'cu_lens': batch['cu_lens'].to(devices[0]),
-#         'max_len': batch['max_len'],
-#         'indices': batch['indices'].to(devices[0]),
-#         'label': batch['label'].to(devices[0]),
-#     }, batch_idx=0)
+model = RegressionTrainer(_model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
 
 checkpoint_callback = ModelCheckpoint(
     dirpath=snakemake.params['checkpoint_dir'],
