@@ -1,3 +1,4 @@
+import torch
 import sklearn
 import lightning as L
 import sklearn.impute
@@ -180,7 +181,7 @@ class MaskedFastaDataset(FastaDataset):
     def __init__(self, fasta, fai=None, max_len=None, k_sample=None, mask_freq=.15,
                  alter_freq=.1, alphabet=Alphabet3):
         super().__init__(fasta, fai=fai, k_sample=k_sample,
-                         max_len=max_len, alphabet=Alphabet3)
+                         max_len=max_len, alphabet=alphabet)
         self.mask_freq = mask_freq
         self.alter_freq = alter_freq
 
@@ -371,3 +372,82 @@ class SetEpochCallback(L.pytorch.callbacks.Callback):
 
     def on_train_epoch_start(self, trainer, pl_module):
         trainer.datamodule.set_epoch(trainer.current_epoch)
+
+
+class LabeledDataset(Dataset):
+
+    def __init__(self, seqs, labels, token_per_batch, shuffle=True, 
+                 random_state=None, truncate_len=None):
+        self.seqs = seqs
+        self.labels = labels
+        self.truncate_len = truncate_len
+
+        self.sampler = list(iter(TokenSizeBatchSampler(
+            [len(seq) for seq in seqs], token_per_batch,
+            shuffle=shuffle, random_state=random_state)))
+
+    def truncate(self, seq):
+        if (self.truncate_len is not None) and (len(seq) > self.truncate_len):
+            return seq[:self.truncate_len]
+        return seq
+
+    def __len__(self):
+        return len(self.sampler)
+
+    def __getitem__(self, idx):
+        indices = self.sampler[idx]
+        tokens, _indices, cu_lens, max_len = tokenize_unpad(
+            [self.truncate(self.seqs[i]) for i in indices])
+        return {
+            'token': tokens,
+            'cu_lens': cu_lens,
+            'max_len': max_len,
+            'indices': _indices,
+            'label': torch.Tensor([self.labels[i] for i in indices])
+        }
+
+
+class LabeledDataModule(L.LightningDataModule):
+
+    def __init__(self, train_seqs, train_labels, val_seqs, val_labels,
+                 test_seqs=None, test_labels=None, token_per_batch=None,
+                 truncate_len=None, num_workers=0):
+        super().__init__()
+        self.train_seqs = train_seqs
+        self.train_labels = train_labels
+        self.val_seqs = val_seqs
+        self.val_labels = val_labels
+        self.test_seqs = test_seqs
+        self.test_labels = test_labels
+
+        self.token_per_batch = token_per_batch
+        self.truncate_len = truncate_len
+        self.num_workers = num_workers
+        self.current_epoch = None
+
+    def _dataloder(self, seqs, labels, shuffle=True, **kwargs):
+        return DataLoader(
+            dataset=LabeledDataset(
+                seqs,
+                labels,
+                token_per_batch=self.token_per_batch,
+                truncate_len=self.truncate_len,
+                shuffle=shuffle,
+                random_state=self.current_epoch
+            ),
+            num_workers=self.num_workers,
+            batch_size=None,
+            **kwargs
+        )
+
+    def train_dataloader(self):
+        return self._dataloder(self.train_seqs, self.train_labels, shuffle=True)
+
+    def val_dataloader(self):
+        return self._dataloder(self.val_seqs, self.val_labels, shuffle=False)
+
+    def test_dataloader(self):
+        return self._dataloder(self.test_seqs, self.test_labels, shuffle=False)
+
+    def set_epoch(self, epoch):
+        self.current_epoch = epoch

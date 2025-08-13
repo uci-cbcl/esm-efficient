@@ -187,9 +187,28 @@ rule download_flip_meltome:
     shell:
         "wget {params.url} -O {params.dir}.zip && unzip {params.dir}.zip -d {params.dir}"
 
+
+rule download_flip_gb1:
+    params:
+        url="http://data.bioembeddings.com/public/FLIP/fasta/gb1/low_vs_high.fasta",
+    output:
+        dataset=config["gb1"]["dataset"],
+    shell:
+        "wget -O {output.dataset} {params.url}"
+
+
+rule download_flip_aav:
+    params:
+        url="http://data.bioembeddings.com/public/FLIP/fasta/aav/low_vs_high.fasta",
+    output:
+        dataset=config["aav"]["dataset"],
+    shell:
+        "wget -O {output.dataset} {params.url}"
+
+
 rule download_c300m:
     params:
-        url='https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12/resolve/main/data/weights/esmc_300m_2024_12_v0.pth?download=true'
+        url="https://huggingface.co/EvolutionaryScale/esmc-300m-2024-12/resolve/main/data/weights/esmc_300m_2024_12_v0.pth?download=true",
     output:
         model=config["esm"]["c300m"],
     shell:
@@ -198,7 +217,7 @@ rule download_c300m:
 
 rule download_c600m:
     params:
-        url='https://huggingface.co/EvolutionaryScale/esmc-600m-2024-12/resolve/main/data/weights/esmc_600m_2024_12_v0.pth?download=true'
+        url="https://huggingface.co/EvolutionaryScale/esmc-600m-2024-12/resolve/main/data/weights/esmc_600m_2024_12_v0.pth?download=true",
     output:
         model=config["esm"]["c600m"],
     shell:
@@ -223,3 +242,5 @@ rule all_download:
         rules.download_proteingym_substitutions.output,
         rules.download_uniport_go_terms.output,
         rules.download_flip_meltome.output,
+        rules.download_flip_gb1.output,
+        rules.download_flip_aav.output,

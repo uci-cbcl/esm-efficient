@@ -4,6 +4,7 @@ rule finetune_meltome_train:
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
+        devices=[3],
         epochs=100,
         checkpoint_dir=config["meltome"]["checkpoint_dir"].replace(
             "{lora}/", "{lora}_head={head}/"
@@ -31,19 +32,27 @@ rule finetune_meltome_test:
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
-        device=4,
+        device=1,
     output:
         predictions=config["meltome"]["predictions"],
-        scatter_test=f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
     notebook:
         "test_meltome.py.ipynb"
 
+
+rule meltome_plot_scatter:
+    input:
+        predictions=config["meltome"]["predictions"],
+    threads: 1
+    output:
+        scatter_test=f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
+    script:
+        "scatter_meltome.py"
 
 rule meltome_barplot:
     input:
         pred=expand(
             config["meltome"]["predictions"],
-            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             lora=["none"],
             head=["nn"],
             quantize=["none"],
@@ -51,7 +60,7 @@ rule meltome_barplot:
         ),
         pred_lora=expand(
             config["meltome"]["predictions"],
-            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             head=["nn"],
             lora=["16;query,value,output"],
             quantize=["none"],
@@ -62,6 +71,42 @@ rule meltome_barplot:
         stats="reports/tables/meltome_barplot_stats.tsv",
     notebook:
         "figures_meltome.py.ipynb"
+
+
+rule meltome_hyperparameter:
+    input:
+        expand(
+            config["meltome"]["predictions"],
+            model=["8Me", "35Me", "150Me"],
+            lora=[
+                "16;query",
+                "16;key",
+                "16;value",
+                "16;output",
+                "16;query,output",
+                "16;query,value,output",
+                "32;query",
+                "32;key",
+                "32;value",
+                "32;output",
+                "32;query,output",
+                "32;query,value,output",
+                "64;query",
+                "64;key",
+                "64;value",
+                "64;output",
+                "64;query,output",
+                "64;query,value,output",
+            ],
+            quantize=["none"],
+            checkpointing=True,
+            head=["nn"],
+        ),
+    output:
+        fig="reports/figures/meltome_hyperparameter.svg",
+        stats="reports/tables/meltome_hyperparameter_stats.tsv",
+    notebook:
+        "figures_meltome_hyperparameter.py.ipynb"
 
 
 rule meltome_scatter:
@@ -80,12 +125,4 @@ rule meltome_scatter:
 
 rule all_meltome:
     input:
-        expand(
-            f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
-            model=["3Be"],
-            lora=["none"],
-            quantize=["none"],
-            checkpointing=True,
-            head=["nn"],
-        ),
-        rules.meltome_barplot.output,
+        rules.meltome_barplot.output

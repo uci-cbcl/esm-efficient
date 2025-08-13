@@ -92,9 +92,12 @@ class FlashMultiheadAttention(nn.Module):
         x = self.norm(x)
 
         if lora_names is not None:
-            q = self.q(x, lora_names) if isinstance(self.q, LoRA) else self.q(x)
-            k = self.k(x, lora_names) if isinstance(self.k, LoRA) else self.k(x)
-            v = self.v(x, lora_names) if isinstance(self.v, LoRA) else self.v(x)
+            q = self.q(x, lora_names) if isinstance(
+                self.q, LoRA) else self.q(x)
+            k = self.k(x, lora_names) if isinstance(
+                self.k, LoRA) else self.k(x)
+            v = self.v(x, lora_names) if isinstance(
+                self.v, LoRA) else self.v(x)
         else:
             q, k, v = self.q(x), self.k(x), self.v(x)
 
@@ -247,7 +250,8 @@ class FlashTransformerLayer(nn.Module):
         Returns:
             torch.Tensor: The output tensor after applying the transformer layer 
         '''
-        x = x + self.self_attn(x, cu_lens, max_len, lora_names) / self.residue_scaling
+        x = x + self.self_attn(x, cu_lens, max_len,
+                               lora_names) / self.residue_scaling
         return x + self.final(x) / self.residue_scaling
 
 

@@ -1,0 +1,99 @@
+rule gb1_train:
+    input:
+        model=model,
+        fasta=config["gb1"]["dataset"],
+    threads: 16
+    params:
+        devices=[0],
+        epochs=150,
+        checkpoint_dir=config["gb1"]["checkpoint_dir"],
+        token_per_batch=10_000
+    output:
+        lora_weights=config["gb1"]["lora_weights"],
+        head_weights=config["gb1"]["head_weights"],
+    script:
+        "train_gb1.py"
+
+
+rule gb1_test:
+    input:
+        model=model,
+        fasta=config["gb1"]["dataset"],
+        lora_weights=config["gb1"]["lora_weights"],
+        head_weights=config["gb1"]["head_weights"],
+    threads: 16
+    params:
+        device=0,
+    output:
+        pred=config['gb1']['preds'],
+        fig='reports/gb1/gb1_scatter_m={model}_l={lora}.png'
+    notebook:
+        "test_gb1.py.ipynb"
+
+
+rule gb1_barplot:
+    input:
+        pred=expand(
+            config['gb1']['preds'], 
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
+            lora=["none", "16;query,value,output"],
+        ),
+    output:
+        fig="reports/figures/gb1_barplot.svg",
+        stats="reports/tables/gb1_barplot_stats.csv",
+    notebook:
+        "gb1_barplot.py.ipynb"
+
+
+rule aav_train:
+    input:
+        model=model,
+        fasta=config["aav"]["dataset"],
+    threads: 16
+    params:
+        token_per_batch=10_000,
+        devices=[0],
+        epochs=150,
+        checkpoint_dir=config["aav"]["checkpoint_dir"],
+    output:
+        lora_weights=config["aav"]["lora_weights"],
+        head_weights=config["aav"]["head_weights"],
+    script:
+        "train_aav.py"
+
+
+rule aav_test:
+    input:
+        model=model,
+        fasta=config["aav"]["dataset"],
+        lora_weights=config["aav"]["lora_weights"],
+        head_weights=config["aav"]["head_weights"],
+    threads: 16
+    params:
+        device=0,
+        token_per_batch=50_000,
+    output:
+        pred=config['aav']['preds'],
+        fig='reports/aav/aav_scatter_m={model}_l={lora}.png'
+    notebook:
+        "test_aav.py.ipynb"
+
+
+rule aav_barplot:
+    input:
+        pred=expand(
+            config['aav']['preds'], 
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
+            lora=["none", "16;query,value,output"],
+        ),
+    output:
+        fig="reports/figures/aav_barplot.svg",
+        stats="reports/tables/aav_barplot_stats.csv",
+    notebook:
+        "aav_barplot.py.ipynb"
+
+
+rule all_gb1_aav:
+    input:
+        rules.aav_barplot.output,
+        rules.gb1_barplot.output,

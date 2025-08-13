@@ -49,5 +49,4 @@ def download_model(model_name: str, local_dir: str = None):
         repo_id='mhcelik/esm-efficient',
         filename=f'{model_name}.safetensors',
         local_dir=local_dir,
-        local_dir_use_symlinks=False
     )
