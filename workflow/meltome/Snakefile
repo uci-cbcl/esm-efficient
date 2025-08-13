@@ -1,7 +1,6 @@
 rule finetune_meltome_train:
     input:
-        model='data/results/models/1v/1v_1.safetensors',
-        # model=model,
+        model=model,
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
@@ -33,7 +32,7 @@ rule finetune_meltome_test:
         dataset=config["meltome"]["dataset"],
     threads: 16
     params:
-        device=3,
+        device=1,
     output:
         predictions=config["meltome"]["predictions"],
     notebook:
@@ -49,12 +48,11 @@ rule meltome_plot_scatter:
     script:
         "scatter_meltome.py"
 
-
 rule meltome_barplot:
     input:
         pred=expand(
             config["meltome"]["predictions"],
-            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             lora=["none"],
             head=["nn"],
             quantize=["none"],
@@ -62,7 +60,7 @@ rule meltome_barplot:
         ),
         pred_lora=expand(
             config["meltome"]["predictions"],
-            model=["8Me", "35Me", "150Me", "650Me", "3Be"],
+            model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             head=["nn"],
             lora=["16;query,value,output"],
             quantize=["none"],
@@ -127,12 +125,4 @@ rule meltome_scatter:
 
 rule all_meltome:
     input:
-        expand(
-            f"reports/figures/meltome_scatter_test_{finetune_wildcards}_head={{head}}.svg",
-            model=["1ve1"],
-            lora=["16;query,value,output"],
-            # lora=["none"],
-            quantize=["none"],
-            checkpointing=True,
-            head=["nn"],
-        ),
+        rules.meltome_barplot.output

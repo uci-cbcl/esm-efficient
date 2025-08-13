@@ -52,7 +52,7 @@ rule aav_train:
     threads: 16
     params:
         token_per_batch=10_000,
-        devices=[2],
+        devices=[0],
         epochs=150,
         checkpoint_dir=config["aav"]["checkpoint_dir"],
     output:
@@ -70,7 +70,7 @@ rule aav_test:
         head_weights=config["aav"]["head_weights"],
     threads: 16
     params:
-        device=1,
+        device=0,
         token_per_batch=50_000,
     output:
         pred=config['aav']['preds'],
@@ -93,7 +93,7 @@ rule aav_barplot:
         "aav_barplot.py.ipynb"
 
 
-rule all_gb1:
+rule all_gb1_aav:
     input:
         rules.aav_barplot.output,
-        # rules.gb1_barplot.output,
+        rules.gb1_barplot.output,

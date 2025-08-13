@@ -44,7 +44,7 @@ if wld_lora == 'none':
     for p in model.plm.parameters():
         p.requires_grad = False
 
-truncate_len=None
+truncate_len = None
 if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
     truncate_len = 4096 - 2
 

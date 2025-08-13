@@ -71,13 +71,12 @@ def partition_mean_pool(embed, cu_lens):
 
 class AttentionPool(nn.Module):
 
-    def __init__(self, attention_heads: int, embed_dim: int, dropout_p=0.0, 
+    def __init__(self, attention_heads: int, embed_dim: int, dropout_p=0.0,
                  dtype=torch.bfloat16):
         super().__init__()
         self.attention_heads = attention_heads
         self.dropout_p = dropout_p
         self.k = nn.Linear(embed_dim, embed_dim, dtype=dtype)
-        # self.cls = nn.Parameter(torch.ones(1, in_dim, dtype=torch.bfloat16))
 
     def forward(self, cls: torch.Tensor, embed: torch.Tensor, pad_args: Tuple[torch.Tensor, int]):
         """
@@ -110,11 +109,13 @@ class AttentionPool(nn.Module):
         k = self.k(embed)
         k = repeat(k, 't (h d) -> (m t) h d', m=n_cls, h=self.attention_heads)
 
-        q = repeat(cls, 'c (h d) -> (c m) h d', m=n_seq, h=self.attention_heads)
+        q = repeat(cls, 'c (h d) -> (c m) h d',
+                   m=n_seq, h=self.attention_heads)
         cu_lens_q = torch.arange(0, n_seq * n_cls + 1,
                                  dtype=torch.int32, device=q.device)
 
-        v = repeat(embed, 't (h d) -> (m t) h d', m=n_cls, h=self.attention_heads)
+        v = repeat(embed, 't (h d) -> (m t) h d',
+                   m=n_cls, h=self.attention_heads)
 
         cu_lens = torch.cat([
             torch.tensor([0], device=cu_lens.device, dtype=torch.int32),
@@ -131,7 +132,7 @@ class AttentionPool(nn.Module):
             dropout_p=self.dropout_p,
             causal=False
         )
-        return rearrange(attn, '(c s) h d -> s c (h d)',  c=n_cls, s=n_seq, 
+        return rearrange(attn, '(c s) h d -> s c (h d)',  c=n_cls, s=n_seq,
                          h=self.attention_heads)
 
 
@@ -157,11 +158,10 @@ class LearnedAttentionPool(AttentionPool):
     >>> output = attn_pool(embed, (cu_lens, max_len))
     """
 
-    def __init__(self, num_cls, attention_heads, embed_dim: int, dropout_p=0.0, 
+    def __init__(self, num_cls, attention_heads, embed_dim: int, dropout_p=0.0,
                  dtype=torch.bfloat16):
         super().__init__(attention_heads, embed_dim, dropout_p, dtype)
         self.cls = nn.Parameter(torch.ones(num_cls, embed_dim, dtype=dtype))
-        # self.reset_parameters()
 
     def forward(self, embed: torch.Tensor, pad_args: Tuple[torch.Tensor, int]):
         """
@@ -178,9 +178,6 @@ class LearnedAttentionPool(AttentionPool):
         """
         return super().forward(self.cls, embed, pad_args)
 
-    # def reset_parameters(self):
-    #     nn.init.trunc_normal_(self.cls, std=1)
-
 
 class LearnedAggregation(nn.Module):
     """
@@ -188,7 +185,7 @@ class LearnedAggregation(nn.Module):
     as queries for attention pooling. The class tokens are learned during
     training and are used to compute the attention scores between the class
     tokens and the embeddings. The function returns the pooled embeddings.
-    
+
     Args:
         num_cls: number of class tokens
         attention_heads: number of attention heads
@@ -206,22 +203,16 @@ class LearnedAggregation(nn.Module):
     torch.Size([2, 1])
     """
 
-    def __init__(self, num_cls, attention_heads: int, embed_dim: int, 
+    def __init__(self, num_cls, attention_heads: int, embed_dim: int,
                  dropout_p=.0, dtype=torch.bfloat16):
         super().__init__()
-        # self.gamma = nn.Parameter(1e-4 * torch.ones(num_cls, embed_dim, dtype=dtype))
-        self.attn = LearnedAttentionPool(num_cls, attention_heads, embed_dim, 
+        self.attn = LearnedAttentionPool(num_cls, attention_heads, embed_dim,
                                          dropout_p=dropout_p, dtype=dtype)
         self.linear = nn.Linear(embed_dim, embed_dim, dtype=dtype)
         self.relu = nn.ReLU()
         self.final = nn.Linear(embed_dim, 1, dtype=dtype)
 
     def forward(self, embed: torch.Tensor, pad_args: Tuple[torch.Tensor, int]):
-        # x = cls + self.gamma_1 * self.attn(cls, embed, pad_args)
-        # return self.final(x + self.gamma_2 * self.ffn(x)).squeeze(-1)
-
-        # x = self.attn.cls + self.gamma * self.attn(embed, pad_args)
-
         x = self.attn(embed, pad_args)
         x = self.final(self.relu(self.linear(x)))
         return x.squeeze(1)

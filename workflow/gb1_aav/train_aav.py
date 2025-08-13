@@ -12,12 +12,12 @@ from esme.data import SetEpochCallback, LabeledDataModule
 from esme import ESM
 from esme.pooling import BinaryLearnedAggregation
 from esme.trainer import RegressionTrainer
-from workflow.gb1.aav import AavDataModule
+from workflow.gb1_aav.aav import AavDataModule
 
 
 torch.set_float32_matmul_precision('medium')
 
-truncate_len=None
+truncate_len = None
 if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
     truncate_len = 4096
 
@@ -31,7 +31,8 @@ datamodule = AavDataModule(
 devices = snakemake.params['devices']
 lora_kwargs = None
 
-_model = ESM.from_pretrained(snakemake.input['model'], checkpointing=True, device=devices[0])
+_model = ESM.from_pretrained(
+    snakemake.input['model'], checkpointing=True, device=devices[0])
 
 wld_lora = snakemake.wildcards['lora']
 if wld_lora != 'none':
@@ -43,16 +44,18 @@ else:
     for p in _model.parameters():
         p.requires_grad = False
 
-head = BinaryLearnedAggregation(_model.attention_heads, _model.embed_dim, dtype=torch.float32).to(devices[0])
+head = BinaryLearnedAggregation(
+    _model.attention_heads, _model.embed_dim, dtype=torch.float32).to(devices[0])
 
 lr = 1e-5
 lr_head = 1e-4
 
-model = RegressionTrainer(_model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
+model = RegressionTrainer(
+    _model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
 
 checkpoint_callback = ModelCheckpoint(
     dirpath=snakemake.params['checkpoint_dir'],
-    save_top_k=1,
+    save_top_k=5,
     monitor='val_loss',
     mode='min'
 )
@@ -63,7 +66,7 @@ wandb_logger.log_hyperparams({
 })
 
 trainer = L.Trainer(
-    precision="bf16-true",
+    precision="bf16-mixed",
     devices=devices,
     max_epochs=snakemake.params['epochs'],
     callbacks=[

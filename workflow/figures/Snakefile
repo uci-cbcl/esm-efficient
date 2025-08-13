@@ -312,6 +312,22 @@ rule sup_figure_9:
         shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
 
 
+rule sup_figure_12:
+    input:
+        fig="reports/figures/meltome_hyperparameter.svg",
+    params:
+        width=1200,
+    threads: 1
+    resources:
+        mem_gb=4,
+    output:
+        fig_pdf="reports/supp_paper_figures/supp_figure-12.pdf",
+        fig_png="reports/supp_paper_figures/supp_figure-12.png",
+    run:
+        shell(f"cairosvg -W {params.width} {input.fig} -o {output.fig_pdf}")
+        shell(f"cairosvg --dpi 300 -W {params.width} {input.fig} -o {output.fig_png}")
+
+
 rule sup_table:
     input:
         tables=[
@@ -350,5 +366,6 @@ rule all_figures:
         rules.sup_figure_7.output,
         rules.sup_figure_8.output,
         rules.sup_figure_9.output,
+        rules.sup_figure_12.output,
         rules.sup_table.output,
         # rules.figure_1.output,

@@ -11,7 +11,7 @@ from esme.data import SetEpochCallback
 from esme import ESM
 from esme.pooling import BinaryLearnedAggregation
 from esme.trainer import RegressionTrainer
-from workflow.gb1.gb1 import Gb1DataModule
+from workflow.gb1_aav.gb1 import Gb1DataModule
 
 
 torch.set_float32_matmul_precision('medium')
@@ -44,27 +44,6 @@ else:
     for p in _model.parameters():
         p.requires_grad = False
 
-# head = nn.Sequential(
-#     nn.Linear(_model.embed_dim, 4096),
-#     nn.ReLU(),
-#     nn.Linear(4096, 1),
-# ).to(torch.bfloat16).to(devices[0])
-
-# class RegressionHead(nn.Module):
-#     def __init__(self, embed_dim, hidden_dim):
-#         super().__init__()
-#         self.linear1 = nn.Linear(embed_dim, hidden_dim)
-#         self.relu = nn.ReLU()
-#         self.linear2 = nn.Linear(hidden_dim, 1)
-
-#     def forward(self, x):
-#         x = self.linear1(x)
-#         x = self.relu(x)
-#         x = self.linear2(x)
-#         x = x.unsqueeze(1)
-#         return x
-
-# head = RegressionHead(_model.embed_dim, 4096).to(torch.bfloat16).to(devices[0])
 head = BinaryLearnedAggregation(_model.attention_heads, _model.embed_dim, dtype=torch.float32).to(devices[0])
 
 lr = 1e-5
@@ -72,29 +51,6 @@ lr_head = 1e-4
 
 model = RegressionTrainer(
     _model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
-
-# for batch in datamodule.train_dataloader():
-
-#     pad_args = (batch['cu_lens'].to(devices[0]), batch['max_len'])
-
-#     embed = _model.forward_representation(
-#         batch['token'].to(devices[0]),
-#         pad_args,
-#         pad_output=False,
-#         pad_indices=batch['indices'].to(devices[0]),
-#     )
-#     # print(embed.shape)
-
-#     x = head(embed, pad_args)
-#     print(x.shape)
-
-#     pred = model.training_step({
-#         'token': batch['token'].to(devices[0]),
-#         'cu_lens': batch['cu_lens'].to(devices[0]),
-#         'max_len': batch['max_len'],
-#         'indices': batch['indices'].to(devices[0]),
-#         'label': batch['label'].to(devices[0]),
-#     }, batch_idx=0)
 
 checkpoint_callback = ModelCheckpoint(
     dirpath=snakemake.params['checkpoint_dir'],

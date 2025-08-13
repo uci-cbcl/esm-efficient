@@ -24,8 +24,8 @@ esm:
 safetensors_download: true
 
 safetensor:
-  esm1b: data/results/models/1b/esm1b.safetensors
-  esm1v: data/results/models/1v/esm1v_{ens}.safetensors
+  esm1b: data/results/models/1b/1b.safetensors
+  esm1v: data/results/models/1v/1v_{ens}.safetensors
   esmc: data/results/safetensor/c/{model}.safetensors
   esm2: data/results/safetensor/{model}.safetensors
 
