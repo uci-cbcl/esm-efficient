@@ -57,11 +57,11 @@ meltome:
 gb1:
   dataset: data/resources/flip/gb1/low_vs_high.fasta
 
-  lora_weights: data/results/gb1/lora_model={model}_lora={lora}.safetensors
-  head_weights: data/results/gb1/head_model={model}_lora={lora}.safetensors
-  checkpoint_dir: data/results/gb1/checkpoints/model={model}_lora={lora}/
+  lora_weights: data/results/gb1/lora_model={model}_lora={lora}_layers={layers}.safetensors
+  head_weights: data/results/gb1/head_model={model}_lora={lora}_layers={layers}.safetensors
+  checkpoint_dir: data/results/gb1/checkpoints/model={model}_lora={lora}_layers={layers}/
 
-  preds: data/results/gb1/preds/model={model}_lora={lora}.csv
+  preds: data/results/gb1/preds/model={model}_lora={lora}_layers={layers}.csv
 
 aav:
   dataset: data/resources/flip/aav/low_vs_high.fasta

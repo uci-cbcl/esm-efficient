@@ -46,7 +46,7 @@ class MaskedPLM(LightningModule):
 
 class RegressionTrainer(LightningModule):
 
-    def __init__(self, model, head, lr=1e-5, lr_head=1e-4, reduction='mean'):
+    def __init__(self, model, head, lr=1e-5, lr_head=1e-4, reduction='mean', layers=None):
         super().__init__()
         self.lr = lr
         self.lr_head = lr_head
@@ -54,13 +54,15 @@ class RegressionTrainer(LightningModule):
         self.plm = model
         self.head = head
         self.reduction = reduction
+        self.layers = layers
 
         self.val_loss = torchmetrics.MeanMetric()
         self.val_spearman = torchmetrics.SpearmanCorrCoef()
 
     def forward(self, token, pad_args, pad_output=False, pad_indices=None):
+
         embed = self.plm.forward_representation(
-            token, pad_args, pad_output=pad_output, pad_indices=pad_indices)
+            token, pad_args, pad_output=pad_output, pad_indices=pad_indices, layers=self.layers)
 
         if self.reduction is None:
             return self.head(embed, pad_args)
@@ -77,7 +79,6 @@ class RegressionTrainer(LightningModule):
                              "expected `'mean'`, `'sum'` or `None`")
 
     def _loss(self, batch):
-        # self.reduction is not None
         y = self(batch['token'], (batch['cu_lens'], batch['max_len']),
                  pad_output=False, pad_indices=batch['indices'])
         labels = batch['label'].to(y.dtype)

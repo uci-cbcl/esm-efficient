@@ -8,7 +8,7 @@ import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 import safetensors.torch as safetensors
-from esme.data import SetEpochCallback, LabeledDataModule
+from esme.data import SetEpochCallback
 from esme import ESM
 from esme.pooling import BinaryLearnedAggregation
 from esme.trainer import RegressionTrainer
