@@ -104,6 +104,7 @@ def test_esm1v_p53(token_p53):
     logit_packed = esm1v(tokens_unpad.to(device), (cu_lens, max_len))
     assert torch.all(logit == logit_packed)
 
+
 def test_ESM2_from_pretrained():
     model = ESM2.from_pretrained(esm2e_8M_path)
     assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
@@ -158,3 +159,103 @@ def test_ESM_from_pretrained():
     assert (model.lm_head.final.weight == model.embed_tokens.weight).all()
     model = ESM.from_pretrained('esm2_8m', quantization='8bit', device=device)
     model = ESM.from_pretrained('esm2_8m', checkpointing=True)
+
+
+def test_ESM2_forward_representation():
+    model = ESM.from_pretrained('esm2_8m', device=device)
+
+    tokens = torch.tensor([5, 2, 3, 5, 6, 7, 8],
+                          device=device, dtype=torch.long)
+    cu_lens = torch.tensor([0, 3, 7], dtype=torch.int, device=device)
+    max_len = 4
+    representation = model.forward_representation(
+        tokens, pad_args=(cu_lens, max_len)
+    )
+    assert representation.shape == (7, model.embed_dim)
+
+    with pytest.raises(AssertionError):
+        representation = model.forward_representation(
+            tokens, pad_args=(cu_lens, max_len), layers=[2, 4, 6]
+        )
+
+    representation = model.forward_representation(
+        tokens, pad_args=(cu_lens, max_len), layers=[2, 4]
+    )
+    assert representation.shape == (7, model.embed_dim * 3)
+
+    tokens = torch.tensor([[5, 2, 3, 1], [5, 6, 7, 8]],
+                          device=device, dtype=torch.long)
+    representation = model.forward_representation(tokens, pad_output=True)
+    assert representation.shape == (2, 4, model.embed_dim)
+
+    representation = model.forward_representation(
+        tokens, pad_output=True, layers=[2, 4])
+    assert representation.shape == (2, 4, model.embed_dim * 3)
+
+
+def test_esmc_forward_representation():
+    model = ESM.from_pretrained('esmc', device=device)
+
+    tokens = torch.tensor([5, 2, 3, 5, 6, 7, 8],
+                          device=device, dtype=torch.long)
+    cu_lens = torch.tensor([0, 3, 7], dtype=torch.int, device=device)
+    max_len = 4
+    representation = model.forward_representation(
+        tokens, pad_args=(cu_lens, max_len)
+    )
+    assert representation.shape == (7, model.embed_dim)
+
+
+def test_esm1b_p53_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1b', device=device)
+
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2
+
+
+def test_esm1v_p53_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1v', device=device)
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2
+
+
+def test_esm1b_p53_int8_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1b', device=device, quantization='8bit')
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2
+
+
+def test_esm1b_p53_int4_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1b', device=device, quantization='4bit')
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2
+
+
+def test_esm1v_p53_int8_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1v', device=device, quantization='8bit')
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2
+
+
+def test_esm1v_p53_int4_perplexity(token_p53):
+    model = ESM.from_pretrained('esm1v', device=device, quantization='4bit')
+    logit = model(token_p53.to(device))
+
+    perplexity = Perplexity(ignore_index=1).to(device)
+    perp = perplexity(logit, token_p53)
+    assert perp < 2

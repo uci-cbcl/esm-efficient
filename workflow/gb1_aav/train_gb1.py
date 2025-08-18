@@ -16,9 +16,15 @@ from workflow.gb1_aav.gb1 import Gb1DataModule
 
 torch.set_float32_matmul_precision('medium')
 
-truncate_len=None
+truncate_len = None
 if snakemake.wildcards['model'].startswith('1ve') or snakemake.wildcards['model'].startswith('1be'):
     truncate_len = 4096
+
+layers = snakemake.wildcards['layers']
+if layers == 'none':
+    layers = None
+else:
+    layers = list(map(int, layers.split(',')))
 
 datamodule = Gb1DataModule(
     snakemake.input['fasta'],
@@ -29,7 +35,6 @@ datamodule = Gb1DataModule(
 
 devices = snakemake.params['devices']
 lora_kwargs = None
-
 
 _model = ESM.from_pretrained(
     snakemake.input['model'], checkpointing=True, device=devices[0])
@@ -44,13 +49,23 @@ else:
     for p in _model.parameters():
         p.requires_grad = False
 
-head = BinaryLearnedAggregation(_model.attention_heads, _model.embed_dim, dtype=torch.float32).to(devices[0])
+if layers:
+    embed_dim = _model.embed_dim * (1 + len(layers))
+else:
+    embed_dim = _model.embed_dim
+
+head = BinaryLearnedAggregation(
+    _model.attention_heads,
+    embed_dim,
+    dtype=torch.float32
+).to(devices[0])
 
 lr = 1e-5
 lr_head = 1e-4
 
 model = RegressionTrainer(
-    _model, head, lr=lr, lr_head=lr_head, reduction=None).to(devices[0])
+    _model, head, lr=lr, lr_head=lr_head, reduction=None, layers=layers
+).to(devices[0])
 
 checkpoint_callback = ModelCheckpoint(
     dirpath=snakemake.params['checkpoint_dir'],

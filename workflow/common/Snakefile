@@ -56,32 +56,35 @@ if not config["safetensors_download"]:
             model=config["safetensor"]["esmc"],
         script:
             "./safetensor_c.py"
+
 else:
+
     rule safetensor_esmb_download:
         params:
             local_dir=Path(config["safetensor"]["esm1b"]).parent,
         output:
-            config["safetensor"]["esm1b"]
+            config["safetensor"]["esm1b"],
         shell:
-            "esme_download -m esm1b -d {params.local_dir}"
+            "esme_download -m esm1b -d {params.local_dir} && mv {params.local_dir}/esm1b.safetensors {output}"
 
     rule safetensor_esm1v_download:
         params:
             local_dir=Path(config["safetensor"]["esm1v"]).parent,
         output:
-            config["safetensor"]["esm1v"]
+            config["safetensor"]["esm1v"],
         shell:
-            "esme_download -m esm1v_{wildcards.ens} -d {params.local_dir}"
+            "esme_download -m esm1v_{wildcards.ens} -d {params.local_dir} && mv {params.local_dir}/esm1v_{wildcards.ens}.safetensors {output}"
 
     rule safetensor_esm2_download:
         wildcard_constraints:
             model="[0-9]+[MB]",
         params:
+            model_name=lambda wld: wld.model.lower(),
             local_dir=Path(config["safetensor"]["esm2"]).parent,
         output:
-            config["safetensor"]["esm2"]
+            config["safetensor"]["esm2"],
         shell:
-            "esme_download -m esm2_{wildcards.model} -d {params.local_dir}"
+            "esme_download -m esm2_{params.model_name} -d {params.local_dir} && mv {params.local_dir}/esm2_{params.model_name}.safetensors {output}"
 
     rule safetensor_esmc_download:
         wildcard_constraints:
@@ -89,9 +92,9 @@ else:
         params:
             local_dir=Path(config["safetensor"]["esmc"]).parent,
         output:
-            config["safetensor"]["esmc"]
+            config["safetensor"]["esmc"],
         shell:
-            "esme_download -m esmc_{wildcards.model} -d {params.local_dir}"
+            "esme_download -m esmc_{wildcards.model} -d {params.local_dir} && mv {params.local_dir}/esmc_{wildcards.model}.safetensors {output}"
 
 
 rule all_common:

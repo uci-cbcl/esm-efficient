@@ -1,6 +1,6 @@
 import torch
 from esme.pooling import PartitionMeanPool, AttentionPool, LearnedAttentionPool, \
-    LearnedAggregation, BinaryLearnedAggregation, MultipleLearnedAggregation
+    LearnedAggregation, BinaryLearnedAggregation
 from conftest import device
 
 
@@ -47,18 +47,8 @@ def test_AttentionPool():
 
     attn_pool = AttentionPool(4, ndim, dtype=torch.bfloat16).to(device)
     cls = torch.randn(1, ndim, device=device, dtype=torch.bfloat16)
-    output = attn_pool(embed, cls, cu_lens, max_len)
+    output = attn_pool(cls, embed, (cu_lens, max_len))
     assert output.shape == (2, 1, ndim)
-
-    attn_pool = AttentionPool(4 * 8, ndim, 8, dtype=torch.bfloat16).to(device)
-    cls = torch.randn(3, ndim * 8, device=device, dtype=torch.bfloat16)
-    output = attn_pool(embed, cls, cu_lens, max_len)
-    assert output.shape == (2, 3, ndim)
-
-    attn_pool = AttentionPool(4 * 8, ndim, 8, 4, dtype=torch.bfloat16).to(device)
-    cls = torch.randn(3, ndim * 8, device=device, dtype=torch.bfloat16)
-    output = attn_pool(embed, cls, cu_lens, max_len)
-    assert output.shape == (2, 3, ndim * 4)
 
 
 def test_LearnedAttentionPool():
@@ -69,19 +59,18 @@ def test_LearnedAttentionPool():
 
     pool = LearnedAttentionPool(4, 4, 512).to(device)
     output = pool(embed, (cu_lens, max_len))
-    assert output.shape == (2, 4, 1)
+    assert output.shape == (2, 4, 512)
 
-    
+
 def test_LearnedAggregation():
     ndim = 64 * 8
     cu_lens = torch.tensor([0, 125, 625], dtype=torch.int32, device=device)
     max_len = 500
     embed = torch.randn(625, ndim, device=device, dtype=torch.bfloat16)
 
-    cls = torch.randn(4, ndim, device=device, dtype=torch.bfloat16)
     pool = LearnedAggregation(4, 4, 512).to(device)
-    output = pool(cls, embed, (cu_lens, max_len))
-    assert output.shape == (2, 4)
+    output = pool(embed, (cu_lens, max_len))
+    assert output.shape == (2, 4, 1)
 
 
 def test_BinaryLearnedAggregation():
@@ -92,15 +81,4 @@ def test_BinaryLearnedAggregation():
 
     pool = BinaryLearnedAggregation(4, 512).to(device)
     output = pool(embed, (cu_lens, max_len))
-    assert output.shape == (2, 1)
-
-
-def test_MultipleLearnedAggregation():
-    ndim = 64 * 8
-    cu_lens = torch.tensor([0, 125, 625], dtype=torch.int32, device=device)
-    max_len = 500
-    embed = torch.randn(625, ndim, device=device, dtype=torch.bfloat16)
-
-    pool = MultipleLearnedAggregation(4, 4, 512).to(device)
-    output = pool(embed, (cu_lens, max_len))
-    assert output.shape == (2, 4)
+    assert output.shape == (2,)

@@ -50,4 +50,3 @@ class AavDataModule(LabeledDataModule):
             truncate_len=truncate_len,
             num_workers=self.num_workers
         )
-

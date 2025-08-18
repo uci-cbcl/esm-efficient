@@ -32,14 +32,21 @@ finetune_wildcards = "model={model}_q={quantize}_c={checkpointing}_lora={lora}"
 baseline_models = list(config["esm"].keys())
 models = [f"{i}e" for i in baseline_models]
 models_esm2 = [
-    i for i in baseline_models if not (i.startswith("1b") or i.startswith("1v") or if.startswith("c"))
+    i
+    for i in baseline_models
+    if not (i.startswith("1b") or i.startswith("1v") or i.startswith("c"))
 ]
 
 
 include: "download/Snakefile"
 include: "common/Snakefile"
+
+
 if not config["safetensors_download"]:
+
     include: "positional_emb/Snakefile"
+
+
 include: "inference/Snakefile"
 include: "variant/Snakefile"
 include: "train/Snakefile"
@@ -48,9 +55,10 @@ include: "gb1_aav/Snakefile"
 include: "tf/Snakefile"
 include: "figures/Snakefile"
 
+
 # include: "upload/Snakefile"
 
 
 rule all:
-   input:
-        rules.all_figures.input
+    input:
+        rules.all_figures.input,

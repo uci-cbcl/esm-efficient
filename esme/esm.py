@@ -199,10 +199,10 @@ class ESM2(nn.Module):
         return x
 
     def forward_representation(self, tokens, pad_args=None, pad_output=False,
-                               pad_indices=None, lora_names=None):
+                               pad_indices=None, lora_names=None, layers=None):
         '''
         Forward pass through the model without the head to get the representation
-        per token in the sequence.
+        for each token in the sequence.
 
         Args:
             tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
@@ -210,7 +210,22 @@ class ESM2(nn.Module):
                 maximum length of the sequences
             pad_output: bool - whether to pad the output to the maximum length
             pad_indices: torch.Tensor - the indices of the padded tokens
+            lora_names: List[str] - the names of the LoRA layers to apply to obtain
+                representations.
+            layers: List[str] - intermediate layers to use for obtaining 
+                representations in addition to final layer.
+
+        Returns:
+            torch.Tensor - the representations of the tokens with shape
+                (batch * seq_len, embed_dim) if pad_output is False else
+                (batch, seq_len, embed_dim). If layers is not none also return
+                representations of intermediate layers in addition to final as
+                (1 + len(layers), batch * seq_len, embed_dim).
         '''
+        layers = layers or list()
+        assert all(i < len(self.layers) for i in layers), \
+            f"Invalid layer indices {layers}. The number of layers in the model is {len(self.layers)}."
+
         x = self.embedding(tokens, pad_args)
 
         if pad_args is not None:
@@ -223,16 +238,30 @@ class ESM2(nn.Module):
             x, pad_indices, cu_lens, max_len, _ = unpad_input(
                 hidden_states=x, attention_mask=~tokens.eq(Alphabet.padding_idx))
 
-        for layer in self.layers:
+        representations = list()
+
+        for i, layer in enumerate(self.layers):
             if self.checkpointing:
                 x = self.checkpoint(layer, x, cu_lens, max_len, lora_names)
             else:
                 x = layer(x, cu_lens, max_len, lora_names)
 
+            if i in layers:
+                representations.append(x)
+
         x = self.emb_layer_norm_after(x)
 
         if pad_output or (pad_args is None):
             x = pad_input(x, pad_indices, len(cu_lens) - 1, max_len)
+
+            if len(representations) > 0:
+                representations = [
+                    pad_input(rep, pad_indices, len(cu_lens) - 1, max_len)
+                    for rep in representations
+                ]
+
+        if representations:
+            x = torch.concat((x, *representations), dim=-1)
 
         return x
 
@@ -794,7 +823,7 @@ class ESMC(ESM2):
                 deepspeed=(checkpointing == 'deepspeed'))
             self.checkpointing = True
 
-        # TODO
+        # TODO: add embedding scale to class arguments and subclasses
         self.embed_scale = 1
         self.embed_tokens = nn.Embedding(64, self.embed_dim, dtype=dtype,
                                          padding_idx=Alphabet3.padding_idx)
@@ -821,18 +850,29 @@ class ESMC(ESM2):
         self.lm_head = RobertaLMHead(self.embed_dim, 64, dtype=dtype)
 
     def forward_representation(self, tokens, pad_args=None, pad_output=False,
-                               pad_indices=None, lora_names=None):
+                               pad_indices=None, lora_names=None, layers=None):
         '''
         Forward pass through the model without the head to get the representation
-        per token in the sequence.
+        for each token in the sequence.
 
         Args:
-            tokens: torch.Tensor - the input tokens with shape(batch, seq_len)
-            pad_args: Tuple[torch.Tensor, int] - (cu_lens, max_len) the cumulative lengths and the
-                maximum length of the sequences
-            pad_output: bool - whether to pad the output to the maximum length
-            pad_indices: torch.Tensor - the indices of the padded tokens
+            tokens (torch.Tensor): The input tokens with shape (batch, seq_len).
+            pad_args (Tuple[torch.Tensor, int], optional): (cu_lens, max_len), the cumulative lengths and the
+            maximum length of the sequences.
+            pad_output (bool, optional): Whether to pad the output to the maximum length.
+            pad_indices (torch.Tensor, optional): The indices of the padded tokens.
+            lora_names (List[str], optional): The names of the LoRA layers to use to obtain
+            the representations.
+            layers (List[int], optional): The indices of the layers to return 
+                intermediate representations.
+
+        Returns:
+            torch.Tensor: The representations for each token in the sequence.
         '''
+        layers = layers or list()
+        assert all(i < len(layers) for i in layers), \
+            f"Invalid layer indices {layers}. The number of layers in the model is {len(self.layers)}."
+
         x = self.embed_tokens(tokens)
 
         if pad_args is not None:
@@ -845,16 +885,30 @@ class ESMC(ESM2):
             x, pad_indices, cu_lens, max_len, _ = unpad_input(
                 hidden_states=x, attention_mask=~tokens.eq(Alphabet3.padding_idx))
 
-        for layer in self.layers:
+        representations = list()
+
+        for i, layer in enumerate(self.layers):
             if self.checkpointing:
                 x = self.checkpoint(layer, x, cu_lens, max_len, lora_names)
             else:
                 x = layer(x, cu_lens, max_len, lora_names)
 
+            if i in layers:
+                representations.append(x)
+
         x = self.emb_layer_norm_after(x)
 
         if pad_output or (pad_args is None):
             x = pad_input(x, pad_indices, len(cu_lens) - 1, max_len)
+
+            if len(representations) > 0:
+                representations = [
+                    pad_input(rep, pad_indices, len(cu_lens) - 1, max_len)
+                    for rep in representations
+                ]
+
+        if representations:
+            x = torch.concat((x, *representations), dim=-1)
 
         return x
 

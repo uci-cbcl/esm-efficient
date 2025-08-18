@@ -7,7 +7,7 @@ rule gb1_train:
         devices=[0],
         epochs=150,
         checkpoint_dir=config["gb1"]["checkpoint_dir"],
-        token_per_batch=10_000
+        token_per_batch=10_000,
     output:
         lora_weights=config["gb1"]["lora_weights"],
         head_weights=config["gb1"]["head_weights"],
@@ -25,8 +25,8 @@ rule gb1_test:
     params:
         device=0,
     output:
-        pred=config['gb1']['preds'],
-        fig='reports/gb1/gb1_scatter_m={model}_l={lora}.png'
+        pred=config["gb1"]["preds"],
+        fig="reports/gb1/gb1_scatter_m={model}_l={lora}_ll={layers}.png",
     notebook:
         "test_gb1.py.ipynb"
 
@@ -34,9 +34,10 @@ rule gb1_test:
 rule gb1_barplot:
     input:
         pred=expand(
-            config['gb1']['preds'], 
+            config["gb1"]["preds"],
             model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             lora=["none", "16;query,value,output"],
+            layers=["none"],
         ),
     output:
         fig="reports/figures/gb1_barplot.svg",
@@ -73,8 +74,8 @@ rule aav_test:
         device=0,
         token_per_batch=50_000,
     output:
-        pred=config['aav']['preds'],
-        fig='reports/aav/aav_scatter_m={model}_l={lora}.png'
+        pred=config["aav"]["preds"],
+        fig="reports/aav/aav_scatter_m={model}_l={lora}.png",
     notebook:
         "test_aav.py.ipynb"
 
@@ -82,7 +83,7 @@ rule aav_test:
 rule aav_barplot:
     input:
         pred=expand(
-            config['aav']['preds'], 
+            config["aav"]["preds"],
             model=["8Me", "35Me", "150Me", "650Me", "3Be", "1ve1"],
             lora=["none", "16;query,value,output"],
         ),
