@@ -151,7 +151,7 @@ pytest tests/
 # Citation
 
 
-Çelik, M. H., & Xie, X. (2025). Efficient Inference, Training, and Fine-tuning of Protein Language Models. [https://doi.org/10.1016/j.isci.2025.113495](*iScience*.)
+Çelik, M. H., & Xie, X. (2025). Efficient Inference, Training, and Fine-tuning of Protein Language Models. *iScience* [https://doi.org/10.1016/j.isci.2025.113495](https://doi.org/10.1016/j.isci.2025.113495)
 
 or from biorxiv [https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1](https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1)
 
