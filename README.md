@@ -149,7 +149,12 @@ pytest tests/
 ```
 
 # Citation
-Manuscript for the efficient implementation: [https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1](https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1)
+
+
+Çelik, M. H., & Xie, X. (2025). Efficient Inference, Training, and Fine-tuning of Protein Language Models. [https://doi.org/10.1016/j.isci.2025.113495](*iScience*.)
+
+or from biorxiv [https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1](https://www.biorxiv.org/content/10.1101/2024.10.22.619563v1)
+
 ```bib
 @article {Celik2024.10.22.619563,
     author = {Celik, Muhammed Hasan and Xie, Xiaohui},
