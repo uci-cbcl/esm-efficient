@@ -1,0 +1,27 @@
+name: GPU Tests (L4)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run tests on L4 GPU via Modal
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Modal
+        run: pip install modal
+
+      - name: Run tests on B200
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: modal run ci/modal_runner.py --ref ${{ github.sha }}
